@@ -580,12 +580,9 @@
         activeQueryHandler = null;
       }
       uciSend('stop');
-      if (sfCurrentMultiPV !== multiPV) {
-        sfCurrentMultiPV = multiPV;
-        uciSend('setoption name MultiPV value ' + multiPV);
-      }
       const moves = {};
       let gotBestmove = false;
+      let readyFired = false;
       const timeout = setTimeout(() => {
         if (gotBestmove) return;
         sfWorker.removeEventListener('message', handler);
@@ -593,10 +590,22 @@
         const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
         if (results.length) setCachedEval(fen, results, multiPV);
         resolve(results);
-      }, 3000);
+      }, 4000);
       const handler = (e) => {
         const line = typeof e.data === 'string' ? e.data : '';
         lastEngineResponse = Date.now();
+        if (!readyFired) {
+          if (line === 'readyok') {
+            readyFired = true;
+            if (sfCurrentMultiPV !== multiPV) {
+              sfCurrentMultiPV = multiPV;
+              uciSend('setoption name MultiPV value ' + multiPV);
+            }
+            uciSend('position fen ' + fen);
+            uciSend('go depth ' + depth);
+          }
+          return;
+        }
         if (line.startsWith('bestmove') && !gotBestmove) {
           gotBestmove = true;
           clearTimeout(timeout);
@@ -626,8 +635,7 @@
       };
       activeQueryHandler = handler;
       sfWorker.addEventListener('message', handler);
-      uciSend('position fen ' + fen);
-      uciSend('go depth ' + depth);
+      uciSend('isready');
     });
   }
 
