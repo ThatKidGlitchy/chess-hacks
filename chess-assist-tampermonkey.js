@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.1.15
+// @version      1.1.16
 // @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -557,6 +557,8 @@
 
   function handleWorkerCrash() {
     console.warn('[Chess Assist] Engine worker crashed, restarting...');
+    if (activeQueryHandler && sfWorker) { try { sfWorker.removeEventListener('message', activeQueryHandler); } catch {} }
+    activeQueryHandler = null;
     sfWorker = null;
     sfReady = false;
     sfCurrentMultiPV = 1;
@@ -564,6 +566,16 @@
     fenCache.clear();
     initEngine();
   }
+
+  let lastEngineResponse = Date.now();
+  setInterval(() => {
+    if (!sfWorker || !sfReady) return;
+    const silent = Date.now() - lastEngineResponse;
+    if (silent > 15000) {
+      console.warn('[Chess Assist] Engine unresponsive for ' + Math.round(silent / 1000) + 's, restarting...');
+      handleWorkerCrash();
+    }
+  }, 5000);
 
   function uciSend(cmd) {
     if (sfWorker) sfWorker.postMessage(cmd);
@@ -584,25 +596,47 @@
     });
   }
 
+  let activeQueryHandler = null;
   function queryLocal(fen, depth, multiPV) {
     multiPV = multiPV || 1;
     const cached = getCachedEval(fen, multiPV);
     if (cached) return Promise.resolve(cached);
     return new Promise((resolve) => {
       if (!sfWorker || !sfReady) { resolve([]); return; }
+      if (activeQueryHandler) {
+        sfWorker.removeEventListener('message', activeQueryHandler);
+        activeQueryHandler = null;
+      }
+      uciSend('stop');
       if (sfCurrentMultiPV !== multiPV) {
         sfCurrentMultiPV = multiPV;
         uciSend('setoption name MultiPV value ' + multiPV);
       }
       const moves = {};
+      let gotBestmove = false;
       const timeout = setTimeout(() => {
+        if (gotBestmove) return;
         sfWorker.removeEventListener('message', handler);
+        activeQueryHandler = null;
         const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
         if (results.length) setCachedEval(fen, results, multiPV);
         resolve(results);
       }, 3000);
       const handler = (e) => {
         const line = typeof e.data === 'string' ? e.data : '';
+        lastEngineResponse = Date.now();
+        if (line.startsWith('bestmove') && !gotBestmove) {
+          gotBestmove = true;
+          clearTimeout(timeout);
+          sfWorker.removeEventListener('message', handler);
+          activeQueryHandler = null;
+          const best = line.split(/\s+/)[1];
+          if (best && best.length >= 4 && !moves[1]) moves[1] = { move: best.slice(0, 4), cp: null };
+          const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+          if (results.length) setCachedEval(fen, results, multiPV);
+          resolve(results);
+          return;
+        }
         const pvMatch = line.match(/multipv\s+(\d+).*?\bpv\s+(\S+)/);
         if (pvMatch) {
           const pvIdx = parseInt(pvMatch[1]);
@@ -617,16 +651,8 @@
             moves[pvIdx] = { move: mv.slice(0, 4), cp };
           }
         }
-        if (line.startsWith('bestmove')) {
-          clearTimeout(timeout);
-          sfWorker.removeEventListener('message', handler);
-          const best = line.split(/\s+/)[1];
-          if (best && best.length >= 4 && !moves[1]) moves[1] = { move: best.slice(0, 4), cp: null };
-          const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
-          if (results.length) setCachedEval(fen, results, multiPV);
-          resolve(results);
-        }
       };
+      activeQueryHandler = handler;
       sfWorker.addEventListener('message', handler);
       uciSend('position fen ' + fen);
       uciSend('go depth ' + depth);
