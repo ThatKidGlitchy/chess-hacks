@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist (Mobile)
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.1.14
+// @version      1.1.15
 // @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -873,24 +873,29 @@
     bot.style.textShadow = flipped ? '0 0 4px #000, 0 0 4px #000' : '0 0 4px #fff, 0 0 4px #fff';
   }
 
-  let processing = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false;
+  let processingMy = false, processingOpp = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false;
+  let oppAbort = null;
   async function tick() {
-    if ((!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection) || processing) return;
+    if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection) return;
     if (!inActiveGame()) return;
     if (window.chessHelper.detection) syncDetectionGame();
     const myTurn = isMyTurn();
     if (myTurn === null) return;
     if (!myTurn) {
+      if (processingOpp) return;
       waitingForOpponent = false;
       lastFen = '';
       const fen = getFEN();
       if (fen && fen === lastOppFen && lastOppMove && !window.chessHelper.detection) return;
-      processing = true;
+      processingOpp = true;
       clearArrows();
       clearShading();
       if (fen) {
+        const abortCtrl = { aborted: false };
+        oppAbort = abortCtrl;
         try {
           const candidates = await queryLocal(fen, ENGINE_DEPTH, 1);
+          if (abortCtrl.aborted) return;
           const om = candidates.length ? candidates[0].move : null;
           if (candidates.length && candidates[0].cp !== null) {
             if (detection.lastMyEvalCp !== null && candidates[0].cp !== null && detection.lastMyEvalFen && detection.lastMyEvalFen !== fen) {
@@ -909,17 +914,19 @@
           lastOppMove = om;
           if (window.chessHelper.showOpponent && om) drawOpponentArrow(om);
           else clearOpponentArrow();
-        } catch (e) { console.warn('[Chess Assist] tick error (opp):', e); } finally { processing = false; }
-      } else { clearOpponentArrow(); processing = false; }
+        } catch (e) { console.warn('[Chess Assist] tick error (opp):', e); } finally { processingOpp = false; oppAbort = null; }
+      } else { clearOpponentArrow(); processingOpp = false; }
       return;
     }
+    if (processingOpp && oppAbort) { oppAbort.aborted = true; processingOpp = false; oppAbort = null; }
+    if (processingMy) return;
     lastOppFen = ''; lastOppMove = null;
     const fen = getFEN(); if (!fen) return;
     if (fen === lastFen) return;
     if (waitingForOpponent && fen !== lastMovedFen) waitingForOpponent = false;
     if (window.chessHelper.autoPlay && fen === lastMovedFen) return;
 
-    processing = true;
+    processingMy = true;
     try {
       thinkingEl.classList.add('active');
       const result = await fetchRemote(fen);
@@ -961,7 +968,7 @@
       console.warn('[Chess Assist] tick error (my):', e);
       lastFen = '';
       if (window.chessHelper.autoPlay) { lastMovedFen = ''; waitingForOpponent = false; }
-    } finally { processing = false; thinkingEl.classList.remove('active'); }
+    } finally { processingMy = false; thinkingEl.classList.remove('active'); }
   }
 
   const obs = new MutationObserver(() => { if (!drawing && (window.chessHelper.autoPlay || window.chessHelper.showArrow || window.chessHelper.hiddenArrow || window.chessHelper.showOpponent || window.chessHelper.showEval || window.chessHelper.detection)) tick(); });
