@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist (Mobile)
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.1.18
+// @version      1.1.19
 // @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -97,7 +97,7 @@
     try {
       localStorage.setItem('ch-settings', JSON.stringify({
         toggles: { autoPlay: window.chessHelper.autoPlay, showArrow: window.chessHelper.showArrow, hiddenArrow: window.chessHelper.hiddenArrow, showOpponent: window.chessHelper.showOpponent, showEval: window.chessHelper.showEval, detection: window.chessHelper.detection },
-        depth: ENGINE_DEPTH, delayMin: DELAY_MIN, delayMax: DELAY_MAX, delayEnabled: DELAY_ENABLED,
+        depth: ENGINE_DEPTH, movetime: ENGINE_MOVETIME, delayMin: DELAY_MIN, delayMax: DELAY_MAX, delayEnabled: DELAY_ENABLED,
         detTarget: detTarget
       }));
     } catch {}
@@ -426,6 +426,7 @@
   const positionMoves = new Map();
   const REPEAT_THRESHOLD = 2;
   let ENGINE_DEPTH = 16;
+  let ENGINE_MOVETIME = 1500;
   let DELAY_MIN = 1, DELAY_MAX = 5, DELAY_ENABLED = false;
 
   const fenCache = new Map();
@@ -684,7 +685,7 @@
     activeSearchHandler = handler;
     sfWorker.addEventListener('message', handler);
     uciSend('position fen ' + fen);
-    uciSend('go depth ' + depth);
+    uciSend('go depth ' + depth + ' movetime ' + ENGINE_MOVETIME);
   }
 
   async function fetchRemote(fen) {
@@ -1080,6 +1081,10 @@
       <div class="ch-tooltip" id="tip-depth">How many moves ahead the engine calculates. Higher = stronger but slower. 16 is a good balance. Below 10 is fast but weaker, above 20 is very slow.</div>
     </div>
     <div>
+      <div class="ch-depth-row"><span class="ch-depth-label">Time limit</span><span class="ch-info" data-tip="movetime">i</span><input type="range" class="ch-range" id="ch-movetime" min="200" max="5000" value="1500" step="100"><span class="ch-depth-val" id="ch-movetime-val">1.5s</span></div>
+      <div class="ch-tooltip" id="tip-movetime">Max time per engine search in milliseconds. Lower = faster response for bullet. The engine returns whatever depth it reached within this limit.</div>
+    </div>
+    <div>
       <div class="ch-row">
         <span class="ch-label">Show best move</span>
         <span class="ch-info" data-tip="arrow">i</span>
@@ -1432,6 +1437,11 @@
     panel.querySelector('#ch-depth-val').textContent = ENGINE_DEPTH;
     saveSettings();
   };
+  panel.querySelector('#ch-movetime').oninput = (e) => {
+    ENGINE_MOVETIME = parseInt(e.target.value);
+    panel.querySelector('#ch-movetime-val').textContent = (ENGINE_MOVETIME / 1000).toFixed(1) + 's';
+    saveSettings();
+  };
   panel.querySelector('#ch-delay-toggle').onchange = (e) => {
     DELAY_ENABLED = e.target.checked;
     panel.querySelector('#ch-delay-sliders').style.display = e.target.checked ? '' : 'none';
@@ -1525,6 +1535,11 @@
       ENGINE_DEPTH = saved.depth;
       const ds = panel.querySelector('#ch-depth'); if (ds) ds.value = ENGINE_DEPTH;
       const dv = panel.querySelector('#ch-depth-val'); if (dv) dv.textContent = ENGINE_DEPTH;
+    }
+    if (typeof saved.movetime === 'number') {
+      ENGINE_MOVETIME = saved.movetime;
+      const ms = panel.querySelector('#ch-movetime'); if (ms) ms.value = ENGINE_MOVETIME;
+      const mv = panel.querySelector('#ch-movetime-val'); if (mv) mv.textContent = (ENGINE_MOVETIME / 1000).toFixed(1) + 's';
     }
     if (typeof saved.delayEnabled === 'boolean') {
       DELAY_ENABLED = saved.delayEnabled;
