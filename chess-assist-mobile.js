@@ -506,6 +506,7 @@
       uciSend('setoption name MultiPV value 1');
       await uciCommand('isready', 'readyok');
       sfReady = true;
+      installReadyokListener();
       hideLoadingOverlay();
     } catch (e) {
       sfWorker = null;
@@ -521,6 +522,7 @@
         uciSend('setoption name MultiPV value 1');
         await uciCommand('isready', 'readyok');
         sfReady = true;
+        installReadyokListener();
         hideLoadingOverlay();
       } catch (e2) {
         sfWorker = null;
@@ -529,10 +531,28 @@
     }
   }
 
+  function installReadyokListener() {
+    if (!sfWorker) return;
+    sfWorker.addEventListener('message', (e) => {
+      const line = typeof e.data === 'string' ? e.data : '';
+      if (line === 'readyok' && isWaitingForReady) {
+        isWaitingForReady = false;
+        if (pendingQuery) {
+          const q = pendingQuery;
+          pendingQuery = null;
+          startSearch(q);
+        }
+      }
+    });
+  }
+
   function handleWorkerCrash() {
     console.warn('[Chess Assist] Engine worker crashed, restarting...');
-    if (activeQueryHandler && sfWorker) { try { sfWorker.removeEventListener('message', activeQueryHandler); } catch {} }
-    activeQueryHandler = null;
+    if (activeSearchHandler && sfWorker) { try { sfWorker.removeEventListener('message', activeSearchHandler); } catch {} }
+    activeSearchHandler = null;
+    if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
+    if (pendingQuery) { pendingQuery.resolve([]); pendingQuery = null; }
+    isWaitingForReady = false;
     sfWorker = null;
     sfReady = false;
     sfCurrentMultiPV = 1;
@@ -568,75 +588,89 @@
     });
   }
 
-  let activeQueryHandler = null;
+  let isWaitingForReady = false;
+  let pendingQuery = null;
+  let activeSearchHandler = null;
+  let activeSearchTimeout = null;
+
   function queryLocal(fen, depth, multiPV) {
     multiPV = multiPV || 1;
     const cached = getCachedEval(fen, multiPV);
     if (cached) return Promise.resolve(cached);
     return new Promise((resolve) => {
       if (!sfWorker || !sfReady) { resolve([]); return; }
-      if (activeQueryHandler) {
-        sfWorker.removeEventListener('message', activeQueryHandler);
-        activeQueryHandler = null;
+      if (pendingQuery) pendingQuery.resolve([]);
+      pendingQuery = { fen, depth, multiPV, resolve };
+      if (isWaitingForReady) return;
+      if (activeSearchHandler) {
+        sfWorker.removeEventListener('message', activeSearchHandler);
+        activeSearchHandler = null;
       }
+      if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
       uciSend('stop');
-      const moves = {};
-      let gotBestmove = false;
-      let readyFired = false;
-      const timeout = setTimeout(() => {
-        if (gotBestmove) return;
+      uciSend('isready');
+      isWaitingForReady = true;
+    });
+  }
+
+  function startSearch(q) {
+    if (!q || !sfWorker || !sfReady) return;
+    const { fen, depth, multiPV, resolve } = q;
+    if (activeSearchHandler) {
+      sfWorker.removeEventListener('message', activeSearchHandler);
+      activeSearchHandler = null;
+    }
+    if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
+    if (sfCurrentMultiPV !== multiPV) {
+      sfCurrentMultiPV = multiPV;
+      uciSend('setoption name MultiPV value ' + multiPV);
+    }
+    const moves = {};
+    let gotBestmove = false;
+    activeSearchTimeout = setTimeout(() => {
+      if (gotBestmove) return;
+      sfWorker.removeEventListener('message', handler);
+      activeSearchHandler = null;
+      activeSearchTimeout = null;
+      const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+      if (results.length) setCachedEval(fen, results, multiPV);
+      resolve(results);
+    }, 4000);
+    const handler = (e) => {
+      const line = typeof e.data === 'string' ? e.data : '';
+      lastEngineResponse = Date.now();
+      if (line.startsWith('bestmove') && !gotBestmove) {
+        gotBestmove = true;
+        clearTimeout(activeSearchTimeout);
+        activeSearchTimeout = null;
         sfWorker.removeEventListener('message', handler);
-        activeQueryHandler = null;
+        activeSearchHandler = null;
+        const best = line.split(/\s+/)[1];
+        if (best && best.length >= 4 && !moves[1]) moves[1] = { move: best.slice(0, 4), cp: null };
         const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
         if (results.length) setCachedEval(fen, results, multiPV);
         resolve(results);
-      }, 4000);
-      const handler = (e) => {
-        const line = typeof e.data === 'string' ? e.data : '';
-        lastEngineResponse = Date.now();
-        if (!readyFired) {
-          if (line === 'readyok') {
-            readyFired = true;
-            if (sfCurrentMultiPV !== multiPV) {
-              sfCurrentMultiPV = multiPV;
-              uciSend('setoption name MultiPV value ' + multiPV);
-            }
-            uciSend('position fen ' + fen);
-            uciSend('go depth ' + depth);
+        return;
+      }
+      const pvMatch = line.match(/multipv\s+(\d+).*?\bpv\s+(\S+)/);
+      if (pvMatch) {
+        const pvIdx = parseInt(pvMatch[1]);
+        const mv = pvMatch[2];
+        if (mv.length >= 4) {
+          const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
+          let cp = null;
+          if (scoreMatch) {
+            const parts = scoreMatch[1].split(/\s+/);
+            cp = parts[0] === 'mate' ? (parseInt(parts[1]) > 0 ? 99999 : -99999) : parseInt(parts[1]);
           }
-          return;
+          moves[pvIdx] = { move: mv.slice(0, 4), cp };
         }
-        if (line.startsWith('bestmove') && !gotBestmove) {
-          gotBestmove = true;
-          clearTimeout(timeout);
-          sfWorker.removeEventListener('message', handler);
-          activeQueryHandler = null;
-          const best = line.split(/\s+/)[1];
-          if (best && best.length >= 4 && !moves[1]) moves[1] = { move: best.slice(0, 4), cp: null };
-          const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
-          if (results.length) setCachedEval(fen, results, multiPV);
-          resolve(results);
-          return;
-        }
-        const pvMatch = line.match(/multipv\s+(\d+).*?\bpv\s+(\S+)/);
-        if (pvMatch) {
-          const pvIdx = parseInt(pvMatch[1]);
-          const mv = pvMatch[2];
-          if (mv.length >= 4) {
-            const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
-            let cp = null;
-            if (scoreMatch) {
-              const parts = scoreMatch[1].split(/\s+/);
-              cp = parts[0] === 'mate' ? (parseInt(parts[1]) > 0 ? 99999 : -99999) : parseInt(parts[1]);
-            }
-            moves[pvIdx] = { move: mv.slice(0, 4), cp };
-          }
-        }
-      };
-      activeQueryHandler = handler;
-      sfWorker.addEventListener('message', handler);
-      uciSend('isready');
-    });
+      }
+    };
+    activeSearchHandler = handler;
+    sfWorker.addEventListener('message', handler);
+    uciSend('position fen ' + fen);
+    uciSend('go depth ' + depth);
   }
 
   async function fetchRemote(fen) {
