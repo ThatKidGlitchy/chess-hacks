@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist (Mobile)
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.1.20
+// @version      1.1.21
 // @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -426,7 +426,6 @@
   const positionMoves = new Map();
   const REPEAT_THRESHOLD = 2;
   let ENGINE_DEPTH = 16;
-  let ENGINE_MOVETIME = 1500;
   let DELAY_MIN = 1, DELAY_MAX = 5, DELAY_ENABLED = false;
 
   const fenCache = new Map();
@@ -685,7 +684,7 @@
     activeSearchHandler = handler;
     sfWorker.addEventListener('message', handler);
     uciSend('position fen ' + fen);
-    uciSend('go depth ' + depth + ' movetime ' + ENGINE_MOVETIME);
+    uciSend('go depth ' + depth);
   }
 
   async function fetchRemote(fen) {

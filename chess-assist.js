@@ -424,7 +424,6 @@
   const positionMoves = new Map();
   const REPEAT_THRESHOLD = 2;
   let ENGINE_DEPTH = 16;
-  let ENGINE_MOVETIME = 1500;
   let DELAY_MIN = 1, DELAY_MAX = 5, DELAY_ENABLED = false;
 
   const fenCache = new Map();
@@ -685,7 +684,7 @@
     activeSearchHandler = handler;
     sfWorker.addEventListener('message', handler);
     uciSend('position fen ' + fen);
-    uciSend('go depth ' + depth + ' movetime ' + ENGINE_MOVETIME);
+    uciSend('go depth ' + depth);
   }
 
   async function fetchRemote(fen) {
