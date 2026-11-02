@@ -44,7 +44,13 @@ Open the raw link with Tampermonkey installed and it will offer to install the s
 
 ### 2. Chrome Extension
 
-Download [`chess-assist-extension.zip`](https://github.com/ThatKidGlitchy/chess-hacks/releases/latest/download/chess-assist-extension.zip) from [releases](https://github.com/ThatKidGlitchy/chess-hacks/releases), unzip, and load as an unpacked extension at `chrome://extensions` with Developer mode on.
+Install directly from the Chrome Web Store:
+
+**[Chess Assist on the Chrome Web Store](https://chromewebstore.google.com/detail/lndpjblmeoajilkhmdppoalcfdpoiaic)**
+
+Extension ID: `lndpjblmeoajilkhmdppoalcfdpoiaic`
+
+The extension version runs multi-threaded Stockfish via a Chrome offscreen document, so it's noticeably faster than the Tampermonkey / bookmarklet single-threaded builds.
 
 ### 3. Bookmarklet
 
