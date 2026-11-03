@@ -941,7 +941,10 @@
       waitingForOpponent = false;
       lastFen = '';
       const fen = getFEN();
-      if (fen && fen === lastOppFen && lastOppMove && !window.chessHelper.detection) return;
+      if (fen && fen === lastOppFen && lastOppMove) {
+        if (!window.chessHelper.detection) return;
+        if (detection.lastOppEvalFen === fen) return;
+      }
       processingOpp = true;
       clearArrows();
       clearShading();
