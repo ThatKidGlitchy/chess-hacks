@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.1.23
+// @version      1.1.24
 // @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -958,6 +958,7 @@
   }
 
   let processingMy = false, processingOpp = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false;
+  let lastOppQueryFen = '', lastOppQueryAt = 0;
   let oppAbort = null;
   let _lastSyncDetection = 0;
   async function tick() {
@@ -975,6 +976,8 @@
         if (!window.chessHelper.detection) return;
         if (detection.lastOppEvalFen === fen) return;
       }
+      if (fen && fen === lastOppQueryFen && Date.now() - lastOppQueryAt < 1500) return;
+      if (fen) { lastOppQueryFen = fen; lastOppQueryAt = Date.now(); }
       processingOpp = true;
       clearArrows();
       clearShading();
