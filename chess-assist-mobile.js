@@ -890,15 +890,33 @@
     drawArrowSVG(b, move, '#96bc4b', '0.8', 'ch-arrow-svg', 1000);
   }
 
+  let oppArrowIds = [];
   function clearOpponentArrow() {
     drawing = true;
     document.querySelectorAll('.ch-opponent-svg').forEach(e => e.remove());
+    const b = getBoard();
+    try {
+      if (b?.game?.markings?.remove && oppArrowIds.length) {
+        for (const id of oppArrowIds) { try { b.game.markings.remove(id); } catch {} }
+      }
+    } catch {}
+    oppArrowIds = [];
     drawing = false;
   }
 
   function drawOpponentArrow(move) {
     clearOpponentArrow();
     const b = getBoard(); if (!b || !move) return;
+    const from = move.slice(0, 2), to = move.slice(2, 4);
+    try {
+      if (b.game?.markings?.addMany) {
+        drawing = true;
+        const ret = b.game.markings.addMany([{ data: { from, to, color: '#e04040', opacity: 0.8 }, type: 'arrow' }]);
+        if (Array.isArray(ret)) oppArrowIds = ret.filter(x => x != null);
+        drawing = false;
+        return;
+      }
+    } catch { drawing = false; }
     drawArrowSVG(b, move, '#e04040', '0.8', 'ch-opponent-svg', 1002);
   }
 
