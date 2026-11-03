@@ -945,10 +945,11 @@
 
   let processingMy = false, processingOpp = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false;
   let oppAbort = null;
+  let _lastSyncDetection = 0;
   async function tick() {
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection) return;
     if (!inActiveGame()) return;
-    if (window.chessHelper.detection) syncDetectionGame();
+    if (window.chessHelper.detection && Date.now() - _lastSyncDetection > 2000) { _lastSyncDetection = Date.now(); syncDetectionGame(); }
     const myTurn = isMyTurn();
     if (myTurn === null) return;
     if (!myTurn) {
@@ -1045,7 +1046,13 @@
     } finally { processingMy = false; thinkingEl.classList.remove('active'); }
   }
 
-  const obs = new MutationObserver(() => { if (!drawing && (window.chessHelper.autoPlay || window.chessHelper.showArrow || window.chessHelper.hiddenArrow || window.chessHelper.showOpponent || window.chessHelper.showEval || window.chessHelper.detection)) tick(); });
+  let _mutDebounce = null;
+  const obs = new MutationObserver(() => {
+    if (drawing) return;
+    if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection) return;
+    if (_mutDebounce) return;
+    _mutDebounce = setTimeout(() => { _mutDebounce = null; tick(); }, 120);
+  });
   let lastObservedBoard = null;
   function watch() {
     const b = getBoard();
@@ -1054,7 +1061,6 @@
       obs.disconnect();
       obs.observe(b, { childList:true, subtree:true, attributes:true });
     }
-    if (!b) setTimeout(watch, 1000);
   }
   watch();
   setInterval(() => { watch(); tick(); }, 500);
@@ -1248,30 +1254,35 @@
   }
 
   let skinLoopRunning = false;
+  let _skinLastRun = 0;
   function skinEnforceLoop() {
     if (!skinLoopRunning) return;
-    const board = getBoard();
-    if (board) {
-      const hasSkins = SKIN_CODES.slice(0, 12).some(c => savedSkins[c]);
-      if (hasSkins) {
-        for (const c of SKIN_CODES.slice(0, 12)) {
-          if (!savedSkins[c]) continue;
-          board.querySelectorAll(`.piece.${c},.promotion-piece.${c}`).forEach(el => {
-            if (el.dataset.chSkin === savedSkins[c]) return;
-            el.style.setProperty('background-image', `url("${savedSkins[c]}")`, 'important');
-            if (skinMaskMode) {
-              const orig = getOriginalPieceUrl(c);
-              el.style.setProperty('-webkit-mask-image', `url("${orig}")`, 'important');
-              el.style.setProperty('mask-image', `url("${orig}")`, 'important');
-              el.style.setProperty('-webkit-mask-size', 'contain', 'important');
-              el.style.setProperty('mask-size', 'contain', 'important');
-              el.style.setProperty('background-size', 'cover', 'important');
-            } else {
-              el.style.setProperty('background-size', 'contain', 'important');
-            }
-            el.style.setProperty('animation', 'none', 'important');
-            el.dataset.chSkin = savedSkins[c];
-          });
+    const now = Date.now();
+    if (now - _skinLastRun >= 250) {
+      _skinLastRun = now;
+      const board = getBoard();
+      if (board) {
+        const hasSkins = SKIN_CODES.slice(0, 12).some(c => savedSkins[c]);
+        if (hasSkins) {
+          for (const c of SKIN_CODES.slice(0, 12)) {
+            if (!savedSkins[c]) continue;
+            board.querySelectorAll(`.piece.${c},.promotion-piece.${c}`).forEach(el => {
+              if (el.dataset.chSkin === savedSkins[c]) return;
+              el.style.setProperty('background-image', `url("${savedSkins[c]}")`, 'important');
+              if (skinMaskMode) {
+                const orig = getOriginalPieceUrl(c);
+                el.style.setProperty('-webkit-mask-image', `url("${orig}")`, 'important');
+                el.style.setProperty('mask-image', `url("${orig}")`, 'important');
+                el.style.setProperty('-webkit-mask-size', 'contain', 'important');
+                el.style.setProperty('mask-size', 'contain', 'important');
+                el.style.setProperty('background-size', 'cover', 'important');
+              } else {
+                el.style.setProperty('background-size', 'contain', 'important');
+              }
+              el.style.setProperty('animation', 'none', 'important');
+              el.dataset.chSkin = savedSkins[c];
+            });
+          }
         }
       }
     }
