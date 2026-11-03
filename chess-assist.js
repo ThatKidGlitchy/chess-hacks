@@ -944,6 +944,7 @@
   }
 
   let processingMy = false, processingOpp = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false;
+  let lastOppQueryFen = '', lastOppQueryAt = 0;
   let oppAbort = null;
   let _lastSyncDetection = 0;
   async function tick() {
@@ -961,6 +962,8 @@
         if (!window.chessHelper.detection) return;
         if (detection.lastOppEvalFen === fen) return;
       }
+      if (fen && fen === lastOppQueryFen && Date.now() - lastOppQueryAt < 1500) return;
+      if (fen) { lastOppQueryFen = fen; lastOppQueryAt = Date.now(); }
       processingOpp = true;
       clearArrows();
       clearShading();
