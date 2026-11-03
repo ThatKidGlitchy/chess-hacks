@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist (Mobile)
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.1.25
+// @version      1.1.26
 // @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -1342,20 +1342,14 @@
       }
     }
     if (savedSkins.board) {
-      css += `.board,#board-vs-personalities,#board-single,#board-board,.fade-in-overlay{background-image:url("${savedSkins.board}")!important;background-size:cover!important;background-position:center!important}\n`;
+      css += `wc-chess-board,chess-board,.board,#board-vs-personalities,#board-single,#board-board,.fade-in-overlay{background-image:url("${savedSkins.board}")!important;background-size:cover!important;background-position:center!important}\n`;
     }
     skinStyleEl.textContent = css;
     const board = getBoard();
     if (board) {
-      if (savedSkins.board) {
-        board.style.setProperty('background-image', `url("${savedSkins.board}")`, 'important');
-        board.style.setProperty('background-size', 'cover', 'important');
-        board.style.setProperty('background-position', 'center', 'important');
-      } else {
-        board.style.removeProperty('background-image');
-        board.style.removeProperty('background-size');
-        board.style.removeProperty('background-position');
-      }
+      board.style.removeProperty('background-image');
+      board.style.removeProperty('background-size');
+      board.style.removeProperty('background-position');
     }
     updateTileOverlays();
     clearInlineSkins();
