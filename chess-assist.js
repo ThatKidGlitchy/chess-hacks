@@ -478,24 +478,6 @@
       jsUrl: 'https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.js',
       wasmUrl: 'https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.wasm'
     },
-    'sf15': {
-      label: 'Stockfish 15',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@15.0.0/src/stockfish.js',
-      wasmUrl: 'https://unpkg.com/stockfish@15.0.0/src/stockfish.wasm'
-    },
-    'sf14': {
-      label: 'Stockfish 14',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@14.1.0/src/stockfish.js',
-      wasmUrl: 'https://unpkg.com/stockfish@14.1.0/src/stockfish.wasm'
-    },
-    'sf12': {
-      label: 'Stockfish 12',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@12.0.0/src/stockfish.js',
-      wasmUrl: 'https://unpkg.com/stockfish@12.0.0/src/stockfish.wasm'
-    },
     'sf11': {
       label: 'Stockfish 11',
       kind: 'wasm',
@@ -503,16 +485,10 @@
       wasmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.wasm',
       asmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.asm.js'
     },
-    'fairy': {
-      label: 'Fairy Stockfish',
-      kind: 'fairy-wasm',
-      jsUrl: 'https://unpkg.com/fairy-stockfish-nnue.wasm@1.1.12/stockfish.js',
-      wasmUrl: 'https://unpkg.com/fairy-stockfish-nnue.wasm@1.1.12/stockfish.wasm'
-    },
     'lozza': {
       label: 'Lozza',
       kind: 'js',
-      url: 'https://cdn.jsdelivr.net/gh/op12no2/lozza@master/lozza.js'
+      url: 'https://cdn.jsdelivr.net/gh/op12no2/lozza@v11.0/lozza.js'
     }
   };
   let currentEngine = 'sf19';
@@ -579,16 +555,6 @@
         ]);
         showLoadingOverlay('Starting ' + engine.label + '...');
         const boot = 'self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})))}};';
-        sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
-        sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
-      } else if (engine.kind === 'fairy-wasm') {
-        showLoadingOverlay('Loading ' + engine.label + '...');
-        const [jsCode, wasmBuf] = await Promise.all([
-          fetchWithProgress(engine.jsUrl, 'Loading engine JS').then(r => r.text()),
-          fetchWithProgress(engine.wasmUrl, 'Loading engine WASM').then(r => r.arrayBuffer())
-        ]);
-        showLoadingOverlay('Starting ' + engine.label + '...');
-        const boot = 'self.onmessage=async function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm;importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));var sf=await Stockfish({wasmBinary:w});sf.addMessageListener(function(line){self.postMessage(line)});self.onmessage=function(ev){sf.postMessage(ev.data)}}};';
         sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
         sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
       } else {
@@ -1320,11 +1286,7 @@
           <option value="sf18">Stockfish 18</option>
           <option value="sf17">Stockfish 17</option>
           <option value="sf16">Stockfish 16</option>
-          <option value="sf15">Stockfish 15</option>
-          <option value="sf14">Stockfish 14</option>
-          <option value="sf12">Stockfish 12</option>
           <option value="sf11">Stockfish 11</option>
-          <option value="fairy">Fairy Stockfish</option>
           <option value="lozza">Lozza</option>
         </select>
         <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Newer versions are stronger.</div>
