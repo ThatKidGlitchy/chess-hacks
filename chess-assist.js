@@ -450,31 +450,66 @@
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
 
   // ── Multi-engine support ──
-  function sfEntry(version) {
-    const major = version.split('.')[0];
-    return {
-      label: 'Stockfish ' + version,
-      kind: 'wasm',
-      base: 'https://unpkg.com/stockfish@' + version + '/bin/',
-      jsFile: 'stockfish-' + major + '-lite-single.js',
-      wasmFile: 'stockfish-' + major + '-lite-single.wasm',
-      asmFallback: 'stockfish-' + major + '-asm.js'
-    };
-  }
   const ENGINES = {
-    'sf19.0.1': sfEntry('19.0.1'),
-    'sf19.0.0': sfEntry('19.0.0'),
-    'sf18.0.8': sfEntry('18.0.8'),
-    'sf18.0.5': sfEntry('18.0.5'),
-    'sf18.0.3': sfEntry('18.0.3'),
-    'sf18.0.1': sfEntry('18.0.1'),
+    'sf19': {
+      label: 'Stockfish 19',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-lite-single.js',
+      wasmUrl: 'https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-lite-single.wasm',
+      asmUrl: 'https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-asm.js'
+    },
+    'sf18': {
+      label: 'Stockfish 18',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-lite-single.js',
+      wasmUrl: 'https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-lite-single.wasm',
+      asmUrl: 'https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-asm.js'
+    },
+    'sf17': {
+      label: 'Stockfish 17',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.js',
+      wasmUrl: 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.wasm',
+      asmUrl: 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-asm-341ff22.js'
+    },
+    'sf16': {
+      label: 'Stockfish 16',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.js',
+      wasmUrl: 'https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.wasm'
+    },
+    'sf15': {
+      label: 'Stockfish 15',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@15.0.0/src/stockfish.js',
+      wasmUrl: 'https://unpkg.com/stockfish@15.0.0/src/stockfish.wasm'
+    },
+    'sf14': {
+      label: 'Stockfish 14',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@14.1.0/src/stockfish.js',
+      wasmUrl: 'https://unpkg.com/stockfish@14.1.0/src/stockfish.wasm'
+    },
+    'sf12': {
+      label: 'Stockfish 12',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@12.0.0/src/stockfish.js',
+      wasmUrl: 'https://unpkg.com/stockfish@12.0.0/src/stockfish.wasm'
+    },
+    'sf11': {
+      label: 'Stockfish 11',
+      kind: 'wasm',
+      jsUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.js',
+      wasmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.wasm',
+      asmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.asm.js'
+    },
     'lozza': {
       label: 'Lozza',
       kind: 'js',
       url: 'https://cdn.jsdelivr.net/gh/op12no2/lozza@master/lozza.js'
     }
   };
-  let currentEngine = 'sf19.0.1';
+  let currentEngine = 'sf19';
 
   function showLoadingOverlay(msg) {
     let ov = document.getElementById('ch-loading-overlay');
@@ -533,8 +568,8 @@
       if (engine.kind === 'wasm') {
         showLoadingOverlay('Loading ' + engine.label + '...');
         const [jsCode, wasmBuf] = await Promise.all([
-          fetchWithProgress(engine.base + engine.jsFile, 'Loading engine JS').then(r => r.text()),
-          fetchWithProgress(engine.base + engine.wasmFile, 'Loading engine WASM').then(r => r.arrayBuffer())
+          fetchWithProgress(engine.jsUrl, 'Loading engine JS').then(r => r.text()),
+          fetchWithProgress(engine.wasmUrl, 'Loading engine WASM').then(r => r.arrayBuffer())
         ]);
         showLoadingOverlay('Starting ' + engine.label + '...');
         const boot = 'self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})))}};';
@@ -558,11 +593,11 @@
       hideLoadingOverlay();
     } catch (e) {
       sfWorker = null;
-      // Try ASM fallback for WASM engines
-      if (engine.kind === 'wasm' && engine.asmFallback) {
+      // Try ASM fallback where available
+      if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
           showLoadingOverlay('Falling back to ASM engine...');
-          const r = await fetch(engine.base + engine.asmFallback);
+          const r = await fetch(engine.asmUrl);
           const code = await r.text();
           sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
           sfWorker.onerror = handleWorkerCrash;
@@ -1159,22 +1194,10 @@
       <button class="ch-tab active" data-tab="gameplay">Gameplay</button>
       <button class="ch-tab" data-tab="detection">Detection</button>
       <button class="ch-tab" data-tab="skins">Skins</button>
+      <button class="ch-tab" data-tab="settings">Settings</button>
     </div>
     <div class="ch-tab-content active" id="ch-tab-gameplay">
     <div class="ch-thinking" id="ch-thinking">Thinking...</div>
-    <div>
-      <div class="ch-row"><span class="ch-label">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
-      <select id="ch-engine" style="width:100%;padding:6px;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;">
-        <option value="sf19.0.1">Stockfish 19.0.1</option>
-        <option value="sf19.0.0">Stockfish 19.0.0</option>
-        <option value="sf18.0.8">Stockfish 18.0.8</option>
-        <option value="sf18.0.5">Stockfish 18.0.5</option>
-        <option value="sf18.0.3">Stockfish 18.0.3</option>
-        <option value="sf18.0.1">Stockfish 18.0.1</option>
-        <option value="lozza">Lozza</option>
-      </select>
-      <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Newer versions are stronger.</div>
-    </div>
     <div>
       <div class="ch-depth-row"><span class="ch-depth-label">Depth</span><span class="ch-info" data-tip="depth">i</span><input type="range" class="ch-range" id="ch-depth" min="1" max="24" value="16"><span class="ch-depth-val" id="ch-depth-val">16</span></div>
       <div class="ch-tooltip" id="tip-depth">How many moves ahead the engine calculates. Higher = stronger but slower. 16 is a good balance. Below 10 is fast but weaker, above 20 is very slow.</div>
@@ -1272,6 +1295,23 @@
         <div class="ch-tooltip" id="tip-mask">Pieces: uses the original piece shape as a mask filled with your custom image. Tiles: each square gets the image individually instead of one large image showing through.</div>
       </div>
       <button class="ch-detect-reset" id="ch-skins-reset">Reset all skins</button>
+    </div>
+    <div class="ch-tab-content" id="ch-tab-settings">
+      <div>
+        <div class="ch-row"><span class="ch-label">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
+        <select id="ch-engine" style="width:100%;padding:6px;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;">
+          <option value="sf19">Stockfish 19</option>
+          <option value="sf18">Stockfish 18</option>
+          <option value="sf17">Stockfish 17</option>
+          <option value="sf16">Stockfish 16</option>
+          <option value="sf15">Stockfish 15</option>
+          <option value="sf14">Stockfish 14</option>
+          <option value="sf12">Stockfish 12</option>
+          <option value="sf11">Stockfish 11</option>
+          <option value="lozza">Lozza</option>
+        </select>
+        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Newer versions are stronger.</div>
+      </div>
     </div>
     <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;">made by <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> · <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Terms &amp; Disclaimer</a></div>
   `;
