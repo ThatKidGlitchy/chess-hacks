@@ -325,8 +325,8 @@
     const commonLength = Math.min(currentMoves.length, savedMoves.length);
     const historyMatches = savedMoves.slice(0, commonLength).every((move, i) => move === currentMoves[i]);
 
-    // On pages without a stable game ID, wait for the move list to load before
-    // deciding whether a cached snapshot belongs to this game.
+    
+    
     if (!identity.stable && savedMoves.length && currentMoves.length < savedMoves.length && historyMatches) return false;
 
     activeDetectionKey = identity.key;
@@ -449,7 +449,7 @@
 
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
 
-  // ── Multi-engine support ──
+  
   const ENGINES = {
     'sf19': {
       label: 'Stockfish 19',
@@ -502,6 +502,12 @@
       jsUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.js',
       wasmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.wasm',
       asmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.asm.js'
+    },
+    'fairy': {
+      label: 'Fairy Stockfish',
+      kind: 'fairy-wasm',
+      jsUrl: 'https://unpkg.com/fairy-stockfish-nnue.wasm@1.1.12/stockfish.js',
+      wasmUrl: 'https://unpkg.com/fairy-stockfish-nnue.wasm@1.1.12/stockfish.wasm'
     },
     'lozza': {
       label: 'Lozza',
@@ -575,8 +581,18 @@
         const boot = 'self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})))}};';
         sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
         sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
+      } else if (engine.kind === 'fairy-wasm') {
+        showLoadingOverlay('Loading ' + engine.label + '...');
+        const [jsCode, wasmBuf] = await Promise.all([
+          fetchWithProgress(engine.jsUrl, 'Loading engine JS').then(r => r.text()),
+          fetchWithProgress(engine.wasmUrl, 'Loading engine WASM').then(r => r.arrayBuffer())
+        ]);
+        showLoadingOverlay('Starting ' + engine.label + '...');
+        const boot = 'self.onmessage=async function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm;importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));var sf=await Stockfish({wasmBinary:w});sf.addMessageListener(function(line){self.postMessage(line)});self.onmessage=function(ev){sf.postMessage(ev.data)}}};';
+        sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
+        sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
       } else {
-        // Pure JS engine (e.g. Lozza) — just spawn a Worker pointing at its source
+        
         showLoadingOverlay('Loading ' + engine.label + '...');
         const r = await fetch(engine.url);
         const code = await r.text();
@@ -593,7 +609,7 @@
       hideLoadingOverlay();
     } catch (e) {
       sfWorker = null;
-      // Try ASM fallback where available
+      
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
           showLoadingOverlay('Falling back to ASM engine...');
@@ -620,7 +636,7 @@
   async function switchEngine(newKey) {
     if (!ENGINES[newKey] || newKey === currentEngine) return;
     currentEngine = newKey;
-    // Tear down current worker
+    
     try {
       if (activeSearchHandler && sfWorker) { sfWorker.removeEventListener('message', activeSearchHandler); activeSearchHandler = null; }
       if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
@@ -1308,6 +1324,7 @@
           <option value="sf14">Stockfish 14</option>
           <option value="sf12">Stockfish 12</option>
           <option value="sf11">Stockfish 11</option>
+          <option value="fairy">Fairy Stockfish</option>
           <option value="lozza">Lozza</option>
         </select>
         <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Newer versions are stronger.</div>
@@ -1586,7 +1603,6 @@
   });
   document.addEventListener('mouseup', () => { panelDragging = false; });
   document.addEventListener('touchend', () => { panelDragging = false; });
-
 
   panel.querySelector('#ch-depth').oninput = (e) => {
     ENGINE_DEPTH = parseInt(e.target.value);
