@@ -450,30 +450,31 @@
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
 
   // ── Multi-engine support ──
+  function sfEntry(version) {
+    const major = version.split('.')[0];
+    return {
+      label: 'Stockfish ' + version,
+      kind: 'wasm',
+      base: 'https://unpkg.com/stockfish@' + version + '/bin/',
+      jsFile: 'stockfish-' + major + '-lite-single.js',
+      wasmFile: 'stockfish-' + major + '-lite-single.wasm',
+      asmFallback: 'stockfish-' + major + '-asm.js'
+    };
+  }
   const ENGINES = {
-    'sf19': {
-      label: 'Stockfish 19 Lite',
-      kind: 'wasm',
-      base: 'https://unpkg.com/stockfish@19.0.1/bin/',
-      jsFile: 'stockfish-19-lite-single.js',
-      wasmFile: 'stockfish-19-lite-single.wasm',
-      asmFallback: 'stockfish-19-asm.js'
-    },
-    'sf18': {
-      label: 'Stockfish 18 Lite',
-      kind: 'wasm',
-      base: 'https://unpkg.com/stockfish@18.0.8/bin/',
-      jsFile: 'stockfish-18-lite-single.js',
-      wasmFile: 'stockfish-18-lite-single.wasm',
-      asmFallback: 'stockfish-18-asm.js'
-    },
+    'sf19.0.1': sfEntry('19.0.1'),
+    'sf19.0.0': sfEntry('19.0.0'),
+    'sf18.0.8': sfEntry('18.0.8'),
+    'sf18.0.5': sfEntry('18.0.5'),
+    'sf18.0.3': sfEntry('18.0.3'),
+    'sf18.0.1': sfEntry('18.0.1'),
     'lozza': {
-      label: 'Lozza (pure JS)',
+      label: 'Lozza',
       kind: 'js',
       url: 'https://cdn.jsdelivr.net/gh/op12no2/lozza@master/lozza.js'
     }
   };
-  let currentEngine = 'sf19';
+  let currentEngine = 'sf19.0.1';
 
   function showLoadingOverlay(msg) {
     let ov = document.getElementById('ch-loading-overlay');
@@ -1164,11 +1165,15 @@
     <div>
       <div class="ch-row"><span class="ch-label">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
       <select id="ch-engine" style="width:100%;padding:6px;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;">
-        <option value="sf19">Stockfish 19 Lite</option>
-        <option value="sf18">Stockfish 18 Lite</option>
-        <option value="lozza">Lozza (pure JS)</option>
+        <option value="sf19.0.1">Stockfish 19.0.1</option>
+        <option value="sf19.0.0">Stockfish 19.0.0</option>
+        <option value="sf18.0.8">Stockfish 18.0.8</option>
+        <option value="sf18.0.5">Stockfish 18.0.5</option>
+        <option value="sf18.0.3">Stockfish 18.0.3</option>
+        <option value="sf18.0.1">Stockfish 18.0.1</option>
+        <option value="lozza">Lozza</option>
       </select>
-      <div class="ch-tooltip" id="tip-engine">Which chess engine runs in the background. Stockfish 19 is strongest. Lozza is a lightweight JS engine (weaker but no WASM download).</div>
+      <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Newer versions are stronger.</div>
     </div>
     <div>
       <div class="ch-depth-row"><span class="ch-depth-label">Depth</span><span class="ch-info" data-tip="depth">i</span><input type="range" class="ch-range" id="ch-depth" min="1" max="24" value="16"><span class="ch-depth-val" id="ch-depth-val">16</span></div>
