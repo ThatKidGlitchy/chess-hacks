@@ -91,7 +91,6 @@
       localStorage.setItem('ch-settings', JSON.stringify({
         toggles: { autoPlay: window.chessHelper.autoPlay, showArrow: window.chessHelper.showArrow, hiddenArrow: window.chessHelper.hiddenArrow, showOpponent: window.chessHelper.showOpponent, showEval: window.chessHelper.showEval, detection: window.chessHelper.detection },
         depth: ENGINE_DEPTH, delayMin: DELAY_MIN, delayMax: DELAY_MAX, delayEnabled: DELAY_ENABLED,
-        engine: currentEngine,
         detTarget: detTarget,
         binds: binds
       }));
@@ -325,8 +324,8 @@
     const commonLength = Math.min(currentMoves.length, savedMoves.length);
     const historyMatches = savedMoves.slice(0, commonLength).every((move, i) => move === currentMoves[i]);
 
-    
-    
+    // On pages without a stable game ID, wait for the move list to load before
+    // deciding whether a cached snapshot belongs to this game.
     if (!identity.stable && savedMoves.length && currentMoves.length < savedMoves.length && historyMatches) return false;
 
     activeDetectionKey = identity.key;
@@ -449,50 +448,6 @@
 
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
 
-  
-  const ENGINES = {
-    'sf19': {
-      label: 'Stockfish 19',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-lite-single.js',
-      wasmUrl: 'https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-lite-single.wasm',
-      asmUrl: 'https://unpkg.com/stockfish@19.0.1/bin/stockfish-19-asm.js'
-    },
-    'sf18': {
-      label: 'Stockfish 18',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-lite-single.js',
-      wasmUrl: 'https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-lite-single.wasm',
-      asmUrl: 'https://unpkg.com/stockfish@18.0.8/bin/stockfish-18-asm.js'
-    },
-    'sf17': {
-      label: 'Stockfish 17',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.js',
-      wasmUrl: 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-lite-single-03e3232.wasm',
-      asmUrl: 'https://unpkg.com/stockfish@17.1.0/src/stockfish-17.1-asm-341ff22.js'
-    },
-    'sf16': {
-      label: 'Stockfish 16',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.js',
-      wasmUrl: 'https://unpkg.com/stockfish@16.0.0/src/stockfish-nnue-16-single.wasm'
-    },
-    'sf11': {
-      label: 'Stockfish 11',
-      kind: 'wasm',
-      jsUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.js',
-      wasmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.wasm',
-      asmUrl: 'https://unpkg.com/stockfish@11.0.0/src/stockfish.asm.js'
-    },
-    'lozza': {
-      label: 'Lozza',
-      kind: 'js',
-      url: 'https://cdn.jsdelivr.net/gh/op12no2/lozza@v11.0/lozza.js'
-    }
-  };
-  let currentEngine = 'sf19';
-
   function showLoadingOverlay(msg) {
     let ov = document.getElementById('ch-loading-overlay');
     if (!ov) {
@@ -545,25 +500,17 @@
   }
   async function _doInitEngine() {
     if (sfWorker) return;
-    const engine = ENGINES[currentEngine] || ENGINES['sf19'];
+    const base = 'https://unpkg.com/stockfish@18.0.8/bin/';
     try {
-      if (engine.kind === 'wasm') {
-        showLoadingOverlay('Loading ' + engine.label + '...');
-        const [jsCode, wasmBuf] = await Promise.all([
-          fetchWithProgress(engine.jsUrl, 'Loading engine JS').then(r => r.text()),
-          fetchWithProgress(engine.wasmUrl, 'Loading engine WASM').then(r => r.arrayBuffer())
-        ]);
-        showLoadingOverlay('Starting ' + engine.label + '...');
-        const boot = 'self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})))}};';
-        sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
-        sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
-      } else {
-        
-        showLoadingOverlay('Loading ' + engine.label + '...');
-        const r = await fetch(engine.url);
-        const code = await r.text();
-        sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
-      }
+      showLoadingOverlay('Loading engine...');
+      const [jsCode, wasmBuf] = await Promise.all([
+        fetchWithProgress(base + 'stockfish-18-lite-single.js', 'Loading engine JS').then(r => r.text()),
+        fetchWithProgress(base + 'stockfish-18-lite-single.wasm', 'Loading engine WASM').then(r => r.arrayBuffer())
+      ]);
+      showLoadingOverlay('Starting engine...');
+      const boot = 'self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})))}};';
+      sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
+      sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
       sfWorker.onerror = handleWorkerCrash;
       await uciCommand('uci', 'uciok');
       uciSend('setoption name Hash value 64');
@@ -575,48 +522,25 @@
       hideLoadingOverlay();
     } catch (e) {
       sfWorker = null;
-      
-      if (engine.kind === 'wasm' && engine.asmUrl) {
-        try {
-          showLoadingOverlay('Falling back to ASM engine...');
-          const r = await fetch(engine.asmUrl);
-          const code = await r.text();
-          sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
-          sfWorker.onerror = handleWorkerCrash;
-          await uciCommand('uci', 'uciok');
-          uciSend('setoption name Hash value 64');
-          sfCurrentMultiPV = 1;
-          uciSend('setoption name MultiPV value 1');
-          await uciCommand('isready', 'readyok');
-          sfReady = true;
-          installReadyokListener();
-          hideLoadingOverlay();
-          return;
-        } catch (e2) {}
+      try {
+        showLoadingOverlay('Falling back to ASM engine...');
+        const r = await fetch(base + 'stockfish-18-asm.js');
+        const code = await r.text();
+        sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+        sfWorker.onerror = handleWorkerCrash;
+        await uciCommand('uci', 'uciok');
+        uciSend('setoption name Hash value 64');
+        sfCurrentMultiPV = 1;
+        uciSend('setoption name MultiPV value 1');
+        await uciCommand('isready', 'readyok');
+        sfReady = true;
+        installReadyokListener();
+        hideLoadingOverlay();
+      } catch (e2) {
+        sfWorker = null;
+        hideLoadingOverlay();
       }
-      sfWorker = null;
-      hideLoadingOverlay();
     }
-  }
-
-  async function switchEngine(newKey) {
-    if (!ENGINES[newKey] || newKey === currentEngine) return;
-    currentEngine = newKey;
-    
-    try {
-      if (activeSearchHandler && sfWorker) { sfWorker.removeEventListener('message', activeSearchHandler); activeSearchHandler = null; }
-      if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
-      if (sfWorker) { sfWorker.terminate(); }
-    } catch {}
-    sfWorker = null;
-    sfReady = false;
-    _initP = null;
-    isWaitingForReady = false;
-    if (pendingQuery) { try { pendingQuery.resolve([]); } catch {} pendingQuery = null; }
-    fenCache.clear();
-    await initEngine();
-    lastFen = '';
-    tick();
   }
 
   function installReadyokListener() {
@@ -742,11 +666,10 @@
         resolve(results);
         return;
       }
-      const mpvMatch = line.match(/\bmultipv\s+(\d+)/);
-      const pvOnlyMatch = line.match(/\bpv\s+(\S+)/);
-      if (pvOnlyMatch) {
-        const pvIdx = mpvMatch ? parseInt(mpvMatch[1]) : 1;
-        const mv = pvOnlyMatch[1];
+      const pvMatch = line.match(/multipv\s+(\d+).*?\bpv\s+(\S+)/);
+      if (pvMatch) {
+        const pvIdx = parseInt(pvMatch[1]);
+        const mv = pvMatch[2];
         if (mv.length >= 4) {
           const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
           let cp = null;
@@ -1177,7 +1100,6 @@
       <button class="ch-tab active" data-tab="gameplay">Gameplay</button>
       <button class="ch-tab" data-tab="detection">Detection</button>
       <button class="ch-tab" data-tab="skins">Skins</button>
-      <button class="ch-tab" data-tab="settings">Settings</button>
     </div>
     <div class="ch-tab-content active" id="ch-tab-gameplay">
     <div class="ch-thinking" id="ch-thinking">Thinking...</div>
@@ -1278,20 +1200,6 @@
         <div class="ch-tooltip" id="tip-mask">Pieces: uses the original piece shape as a mask filled with your custom image. Tiles: each square gets the image individually instead of one large image showing through.</div>
       </div>
       <button class="ch-detect-reset" id="ch-skins-reset">Reset all skins</button>
-    </div>
-    <div class="ch-tab-content" id="ch-tab-settings">
-      <div>
-        <div class="ch-row"><span class="ch-label">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
-        <select id="ch-engine" style="width:100%;padding:6px;background:rgba(255,255,255,0.05);color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;">
-          <option value="sf19">Stockfish 19</option>
-          <option value="sf18">Stockfish 18</option>
-          <option value="sf17">Stockfish 17</option>
-          <option value="sf16">Stockfish 16</option>
-          <option value="sf11">Stockfish 11</option>
-          <option value="lozza">Lozza</option>
-        </select>
-        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves.<br><br><b>Stockfish 19</b> — newest, strongest, uses the latest NNUE.<br><b>Stockfish 18</b> — nearly identical strength to 19, slightly older NNUE.<br><b>Stockfish 17</b> — 2024 release, still elite-level play.<br><b>Stockfish 16</b> — 2023, first with efficient NNUE; slightly weaker than 17+.<br><b>Stockfish 11</b> — 2020 classical evaluation, no NNUE. Noticeably weaker but very fast to load and plays more "human" moves.<br><b>Lozza</b> — pure JavaScript engine. Weaker than every Stockfish listed here (roughly club-level) but loads instantly with no WASM download.</div>
-      </div>
     </div>
     <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;">made by <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> · <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Terms &amp; Disclaimer</a></div>
   `;
@@ -1567,17 +1475,11 @@
   document.addEventListener('mouseup', () => { panelDragging = false; });
   document.addEventListener('touchend', () => { panelDragging = false; });
 
+
   panel.querySelector('#ch-depth').oninput = (e) => {
     ENGINE_DEPTH = parseInt(e.target.value);
     panel.querySelector('#ch-depth-val').textContent = ENGINE_DEPTH;
     saveSettings();
-  };
-  const engineSelect = panel.querySelector('#ch-engine');
-  engineSelect.value = currentEngine;
-  engineSelect.onchange = (e) => {
-    const newKey = e.target.value;
-    saveSettings();
-    switchEngine(newKey);
   };
   panel.querySelector('#ch-delay-toggle').onchange = (e) => {
     DELAY_ENABLED = e.target.checked;
@@ -1863,10 +1765,6 @@
     }
     if (typeof saved.delayMin === 'number') { DELAY_MIN = saved.delayMin; delayMinSlider.value = DELAY_MIN; delayMinVal.textContent = DELAY_MIN + 's'; }
     if (typeof saved.delayMax === 'number') { DELAY_MAX = saved.delayMax; delayMaxSlider.value = DELAY_MAX; delayMaxVal.textContent = DELAY_MAX + 's'; }
-    if (typeof saved.engine === 'string' && ENGINES[saved.engine]) {
-      currentEngine = saved.engine;
-      const sel = panel.querySelector('#ch-engine'); if (sel) sel.value = currentEngine;
-    }
     if (saved.detTarget === 'w') {
       detTarget = 'w';
       panel.querySelector('#ch-det-white').style.background = 'var(--ch-accent)';
