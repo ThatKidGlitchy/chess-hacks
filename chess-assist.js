@@ -1290,7 +1290,7 @@
           <option value="sf11">Stockfish 11</option>
           <option value="lozza">Lozza</option>
         </select>
-        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Newer versions are stronger.</div>
+        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves.<br><br><b>Stockfish 19</b> — newest, strongest, uses the latest NNUE.<br><b>Stockfish 18</b> — nearly identical strength to 19, slightly older NNUE.<br><b>Stockfish 17</b> — 2024 release, still elite-level play.<br><b>Stockfish 16</b> — 2023, first with efficient NNUE; slightly weaker than 17+.<br><b>Stockfish 11</b> — 2020 classical evaluation, no NNUE. Noticeably weaker but very fast to load and plays more "human" moves.<br><b>Lozza</b> — pure JavaScript engine. Weaker than every Stockfish listed here (roughly club-level) but loads instantly with no WASM download.</div>
       </div>
     </div>
     <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;">made by <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> · <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Terms &amp; Disclaimer</a></div>
