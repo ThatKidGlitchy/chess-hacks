@@ -742,10 +742,11 @@
         resolve(results);
         return;
       }
-      const pvMatch = line.match(/multipv\s+(\d+).*?\bpv\s+(\S+)/);
-      if (pvMatch) {
-        const pvIdx = parseInt(pvMatch[1]);
-        const mv = pvMatch[2];
+      const mpvMatch = line.match(/\bmultipv\s+(\d+)/);
+      const pvOnlyMatch = line.match(/\bpv\s+(\S+)/);
+      if (pvOnlyMatch) {
+        const pvIdx = mpvMatch ? parseInt(mpvMatch[1]) : 1;
+        const mv = pvOnlyMatch[1];
         if (mv.length >= 4) {
           const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
           let cp = null;
