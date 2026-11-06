@@ -2,10 +2,15 @@
 
 Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 
+**Current version: v1.3.0**
+
 ![Chess Assist UI](.github/screenshot.png)
 
 ## Features
 
+- **Multiple engines** — pick from 14 engines at runtime: Stockfish 8, 10, 11, 12, 14, 15, 16, 17, 18, 19, Lozza 1/3/11, and Garbochess
+- **Per-engine depth memory** — each engine remembers its own search depth independently
+- **Loading overlay with progress %** — full-screen spinner shows which engine is loading and real-time download percent
 - **Auto-play** — engine plays the best move automatically each turn with anti-repetition to avoid draw loops
 - **Move delay** — random delay before auto-play moves (0–15s) to simulate human thinking time
 - **Best move arrows** — green arrow showing the engine's top pick
@@ -18,10 +23,12 @@ Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 - **Custom piece skins** — upload custom images for any piece (both colors)
 - **Board themes** — custom board background image
 - **Tile overlays** — separate images for light and dark squares
-- **Adjustable depth** — engine search depth from 1 to 24 (default 16)
-- **Customizable keybinds** — assign hotkeys to any toggle
-- **Tabbed UI** — Gameplay / Detection / Skins in a draggable panel
-- All settings persist in localStorage across page reloads (toggles, depth, delay, keybinds, detection target)
+- **Adjustable depth** — engine search depth from 1 to 24 (default 16, auto-caps at 12 for pure-JS engines)
+- **Customizable keybinds** — assign hotkeys to any toggle, with a one-click Reset keybinds button
+- **Save settings toggle** — turn persistence off to make session-only changes; wipes localStorage cleanly when disabled
+- **Tabbed UI** — Gameplay / Detection / Skins / Settings in a draggable panel
+- **Pre-game arrows** — arrows and eval render on the bot-selection / setup board; auto-play stays off until the real game starts
+- All settings persist in localStorage across page reloads (toggles, depth, per-engine depth, delay, keybinds, detection target, engine selection)
 - All skins persist in localStorage across sessions
 - Runs entirely client-side, no data sent anywhere
 
@@ -97,9 +104,28 @@ Always runs the latest version from GitHub:
 
 On desktop Safari or any browser with console access, paste the contents of `chess-assist-mobile.js` directly.
 
-## Engine
+## Engines
 
-Both versions use Stockfish 19 WASM (lite single-threaded build) loaded from unpkg CDN. Falls back to ASM.js if WASM is unavailable. MultiPV 3 with anti-repetition logic to avoid draw loops.
+The desktop version (`chess-assist.js`) ships with 14 engines selectable from the Settings tab, all hosted from the companion [chess-engines](https://github.com/ThatKidGlitchy/chess-engines) repo via jsDelivr. All builds are single-threaded so they work on chess.com (which doesn't set the COOP/COEP headers needed for `SharedArrayBuffer`).
+
+| Engine | Kind | Max depth | Notes |
+|--------|------|-----------|-------|
+| Stockfish 19 | WASM (lite NNUE) | 24 | Default; strongest |
+| Stockfish 18 | WASM (lite NNUE) | 24 | |
+| Stockfish 17 | WASM (lite NNUE) | 24 | |
+| Stockfish 16 | WASM (lite NNUE) | 24 | |
+| Stockfish 15 | WASM | 24 | |
+| Stockfish 14 | WASM | 24 | |
+| Stockfish 12 | WASM | 24 | First NNUE build |
+| Stockfish 11 | WASM | 24 | Last classical build |
+| Stockfish 10 | WASM | 24 | |
+| Stockfish 8 | asm.js | 24 | Pure asm.js, 64 MB fixed memory |
+| Lozza 11 | Pure JS (NNUE) | 12 | |
+| Lozza 3 | Pure JS | 12 | |
+| Lozza 1 | Pure JS | 12 | Classical |
+| Garbochess | Pure JS | 12 | Gary Linscott's engine with a UCI wrapper |
+
+Each engine falls back to ASM.js when its WASM wrapper references features (like `SharedArrayBuffer`) that fail in a plain Worker. MultiPV up to 3 with anti-repetition logic to avoid draw loops; pure-JS engines run MultiPV 1 only.
 
 ## Arrow Colors
 
