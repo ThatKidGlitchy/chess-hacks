@@ -535,11 +535,9 @@
     },
     'sf10': {
       label: 'Stockfish 10',
-      kind: 'wasm',
+      kind: 'js',
       maxDepth: 24,
-      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.wasm',
-      asmUrl:  'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.asm.js'
+      url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.asm.js'
     },
     'sf8': {
       label: 'Stockfish 8',
