@@ -518,13 +518,6 @@
       jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
       wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
     },
-    'sf15': {
-      label: 'Stockfish 15',
-      kind: 'wasm',
-      maxDepth: 24,
-      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/15/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/15/stockfish.wasm'
-    },
     'sf11': {
       label: 'Stockfish 11',
       kind: 'wasm',
@@ -1478,7 +1471,6 @@
           <option value="sf18" style="background:#1a1a1c;color:#fff;">Stockfish 18</option>
           <option value="sf17" style="background:#1a1a1c;color:#fff;">Stockfish 17</option>
           <option value="sf16" style="background:#1a1a1c;color:#fff;">Stockfish 16</option>
-          <option value="sf15" style="background:#1a1a1c;color:#fff;">Stockfish 15</option>
           <option value="sf11" style="background:#1a1a1c;color:#fff;">Stockfish 11</option>
           <option value="sf10" style="background:#1a1a1c;color:#fff;">Stockfish 10</option>
           <option value="sf8" style="background:#1a1a1c;color:#fff;">Stockfish 8</option>
