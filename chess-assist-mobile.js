@@ -1,3 +1,17 @@
+// ==UserScript==
+// @name         Chess Assist (Mobile)
+// @namespace    https://github.com/ThatKidGlitchy/chess-hacks
+// @version      1.3.1
+// @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
+// @author       ThatKidGlitchy
+// @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
+// @supportURL   https://github.com/ThatKidGlitchy/chess-hacks/issues
+// @updateURL    https://raw.githubusercontent.com/ThatKidGlitchy/chess-hacks/main/chess-assist-tampermonkey-mobile.js
+// @downloadURL  https://raw.githubusercontent.com/ThatKidGlitchy/chess-hacks/main/chess-assist-tampermonkey-mobile.js
+// @match        *://*.chess.com/*
+// @grant        none
+// ==/UserScript==
+
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
