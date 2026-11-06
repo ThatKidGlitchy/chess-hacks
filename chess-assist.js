@@ -1,4 +1,4 @@
-// Chess Assist v1.3.0 — https://github.com/ThatKidGlitchy/chess-hacks
+// Chess Assist v1.3.1 — https://github.com/ThatKidGlitchy/chess-hacks
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
@@ -524,20 +524,6 @@
       maxDepth: 24,
       jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/15/stockfish.js',
       wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/15/stockfish.wasm'
-    },
-    'sf14': {
-      label: 'Stockfish 14',
-      kind: 'wasm',
-      maxDepth: 24,
-      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/14/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/14/stockfish.wasm'
-    },
-    'sf12': {
-      label: 'Stockfish 12',
-      kind: 'wasm',
-      maxDepth: 24,
-      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/12/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/12/stockfish.wasm'
     },
     'sf11': {
       label: 'Stockfish 11',
@@ -1495,8 +1481,6 @@
           <option value="sf17" style="background:#1a1a1c;color:#fff;">Stockfish 17</option>
           <option value="sf16" style="background:#1a1a1c;color:#fff;">Stockfish 16</option>
           <option value="sf15" style="background:#1a1a1c;color:#fff;">Stockfish 15</option>
-          <option value="sf14" style="background:#1a1a1c;color:#fff;">Stockfish 14</option>
-          <option value="sf12" style="background:#1a1a1c;color:#fff;">Stockfish 12</option>
           <option value="sf11" style="background:#1a1a1c;color:#fff;">Stockfish 11</option>
           <option value="sf10" style="background:#1a1a1c;color:#fff;">Stockfish 10</option>
           <option value="sf8" style="background:#1a1a1c;color:#fff;">Stockfish 8</option>
