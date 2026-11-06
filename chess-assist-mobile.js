@@ -1,4 +1,4 @@
-// Chess Assist (Mobile) v1.3.2 — https://github.com/ThatKidGlitchy/chess-hacks
+// Chess Assist (Mobile) v1.3.1 — https://github.com/ThatKidGlitchy/chess-hacks
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
