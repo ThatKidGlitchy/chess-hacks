@@ -2,7 +2,7 @@
 // @name         Chess Assist
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
 // @version      1.3.1
-// @description  Stockfish-powered chess.com assistant with auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection against opponents, and custom skins.
+// @description  Chess.com assistant with 14 selectable engines (Stockfish 8-19, Lozza, Garbochess), auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection, custom skins, and per-engine depth memory.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
 // @supportURL   https://github.com/ThatKidGlitchy/chess-hacks/issues
@@ -48,6 +48,8 @@
     .ch-btn { padding:10px; border-radius:12px; border:1px solid rgba(255,255,255,0.05); background:rgba(255,255,255,0.05); color:#fff; font-family:var(--ch-font); font-size:13px; font-weight:600; cursor:pointer; transition:.2s; }
     .ch-btn-primary { background:var(--ch-accent); color:#121212; border:none; }
     .ch-btn-primary:hover { background:var(--ch-accent-hover); }
+    #ch-reset-binds:hover { background:rgba(255,255,255,0.12) !important; color:#fff !important; border-color:rgba(255,255,255,0.2) !important; }
+    #ch-reset-binds:active { transform:scale(0.97); background:rgba(255,255,255,0.18) !important; transition:all .05s !important; }
     .ch-depth-row { display:flex; align-items:center; gap:10px; }
     .ch-depth-label { font-size:13px; color:#fff; font-weight:500; white-space:nowrap; }
     .ch-depth-val { font-size:13px; color:var(--ch-accent); font-weight:700; min-width:20px; text-align:center; }
@@ -92,6 +94,7 @@
   document.head.appendChild(style);
 
   window.chessHelper = { autoPlay: false, showArrow: false, hiddenArrow: false, showOpponent: false, showEval: false, detection: true };
+  let persistSettings = localStorage.getItem('ch-persist') !== '0';
 
   function loadSettings() {
     try {
@@ -101,12 +104,16 @@
     } catch { return null; }
   }
   function saveSettings() {
+    if (!persistSettings) return;
     try {
       localStorage.setItem('ch-settings', JSON.stringify({
         toggles: { autoPlay: window.chessHelper.autoPlay, showArrow: window.chessHelper.showArrow, hiddenArrow: window.chessHelper.hiddenArrow, showOpponent: window.chessHelper.showOpponent, showEval: window.chessHelper.showEval, detection: window.chessHelper.detection },
-        depth: ENGINE_DEPTH, delayMin: DELAY_MIN, delayMax: DELAY_MAX, delayEnabled: DELAY_ENABLED,
+        depth: ENGINE_DEPTH, engineDepths: engineDepths, delayMin: DELAY_MIN, delayMax: DELAY_MAX, delayEnabled: DELAY_ENABLED,
+        engine: currentEngine,
         detTarget: detTarget,
-        binds: binds
+        binds: binds,
+        panelPos: { x: panelX, y: panelY },
+        bubblePos: { x: ox, y: oy }
       }));
     } catch {}
   }
@@ -213,7 +220,6 @@
   }
 
   function recalcDetection() {
-    const myColor = getMyColor();
     const targetColor = detTarget;
     const entries = moveLog.filter(e => e.color === targetColor);
     detection.oppMoves = entries.length;
@@ -338,18 +344,18 @@
     const commonLength = Math.min(currentMoves.length, savedMoves.length);
     const historyMatches = savedMoves.slice(0, commonLength).every((move, i) => move === currentMoves[i]);
 
-    // On pages without a stable game ID, wait for the move list to load before
-    // deciding whether a cached snapshot belongs to this game.
     if (!identity.stable && savedMoves.length && currentMoves.length < savedMoves.length && historyMatches) return false;
 
     activeDetectionKey = identity.key;
     moveLog.length = 0;
+    positionMoves.clear();
     Object.assign(detection, {
       oppMoves: 0, totalCpl: 0, bestMoves: 0, topThree: 0, blunders: 0,
       lastOppEvalCp: null, lastOppEvalFen: null, lastMyEvalCp: null, lastMyEvalFen: null
     });
 
-    const canRestore = saved && (identity.stable || (savedMoves.length <= currentMoves.length && historyMatches));
+    const freshGameAgainstCachedOpponent = !identity.stable && currentMoves.length === 0 && savedMoves.length > 0;
+    const canRestore = !freshGameAgainstCachedOpponent && saved && (identity.stable || (savedMoves.length <= currentMoves.length && historyMatches));
     if (canRestore) {
       const savedLog = Array.isArray(saved.moveLog) ? saved.moveLog : [];
       moveLog.push(...savedLog.filter(move => (move.color === 'w' || move.color === 'b') && Number.isFinite(move.cpl)));
@@ -382,12 +388,27 @@
   function inActiveGame() {
     const b = getBoard();
     if (!b) return false;
-    if (document.querySelector('.move-list-wrapper, .vertical-move-list, wc-move-list, [class*="move-list"]')) return true;
-    const clocks = document.querySelectorAll('.clock-component, .clock-bottom, .clock-top');
-    if ([...clocks].some(c => c.classList.contains('clock-player-turn'))) return true;
+    const clocks = document.querySelectorAll('.clock-component, .clock-bottom, .clock-top, [class*="clock-component"]');
+    if ([...clocks].some(c => c.classList.contains('clock-player-turn') || [...c.classList].some(cl => cl.includes('clock-player-turn')))) return true;
     if (clocks.length >= 2) return true;
-    if (b.game?.getTurn && b.game?.getPlayingAs) return true;
+    if (b.game?.getPlayingAs) {
+      try {
+        const p = b.game.getPlayingAs();
+        if (p === 1 || p === 2 || p === 'w' || p === 'b' || p === 'white' || p === 'black') return true;
+        if (p != null) return true;
+      } catch { return true; }
+    }
+    if (clocks.length >= 1 && document.querySelector('wc-move-list, .move-list-wrapper, .vertical-move-list')) {
+      if (b.game?.getFEN || b.game?.getTurn) return true;
+    }
     return false;
+  }
+
+  function gameInProgress() {
+    const sel = '.game-setup-component, .bot-selection-component, [class*="game-setup"], [class*="bot-selection"], .selection-menu-personalities, .board-modal-container-component, .game-over-modal-content';
+    const el = document.querySelector(sel);
+    if (el && el.offsetParent !== null) return false;
+    return true;
   }
 
   function isMyTurn() {
@@ -415,7 +436,7 @@
     const b = getBoard();
     if (b?.game?.getFEN) {
       const fen = b.game.getFEN();
-      if (fen && fen.includes('/')) { const parts = fen.split(' '); if (parts.length >= 4) parts[3] = '-'; return parts.join(' '); }
+      if (fen && fen.includes('/')) return fen;
     }
     const pieces = document.querySelectorAll('.piece');
     if (!pieces.length) return null;
@@ -432,22 +453,38 @@
     let turn = 'w';
     if (bottom && bottom.classList.contains('clock-player-turn')) turn = getMyColor() || 'w';
     else if (top && top.classList.contains('clock-player-turn')) turn = (getMyColor() === 'w' ? 'b' : 'w');
-    return rows.join('/') + ` ${turn} - - 0 1`;
+    let castle = '';
+    if (board[7][4] === 'K') {
+      if (board[7][7] === 'R') castle += 'K';
+      if (board[7][0] === 'R') castle += 'Q';
+    }
+    if (board[0][4] === 'k') {
+      if (board[0][7] === 'r') castle += 'k';
+      if (board[0][0] === 'r') castle += 'q';
+    }
+    if (!castle) castle = '-';
+    return rows.join('/') + ` ${turn} ${castle} - 0 1`;
   }
 
   const positionMoves = new Map();
   const REPEAT_THRESHOLD = 2;
   let ENGINE_DEPTH = 16;
+  const engineDepths = {};
   let DELAY_MIN = 1, DELAY_MAX = 5, DELAY_ENABLED = false;
 
   const fenCache = new Map();
   const FEN_CACHE_MAX = 100;
   function getCachedEval(fen, multiPV) {
     const entry = fenCache.get(fen);
-    if (entry && entry.multiPV >= multiPV) return entry.results;
+    if (entry && entry.multiPV >= multiPV) {
+      fenCache.delete(fen);
+      fenCache.set(fen, entry);
+      return entry.results;
+    }
     return null;
   }
   function setCachedEval(fen, results, multiPV) {
+    if (fenCache.has(fen)) fenCache.delete(fen);
     if (fenCache.size >= FEN_CACHE_MAX) {
       const first = fenCache.keys().next().value;
       fenCache.delete(first);
@@ -462,99 +499,262 @@
 
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
 
-  function showLoadingOverlay(msg) {
-    let ov = document.getElementById('ch-loading-overlay');
-    if (!ov) {
-      ov = document.createElement('div');
-      ov.id = 'ch-loading-overlay';
-      ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.65);display:flex;align-items:center;justify-content:center;z-index:999999;';
-      ov.innerHTML = '<div style="background:#1e1e1e;border:1px solid #444;border-radius:12px;padding:28px 36px;text-align:center;color:#fff;font-family:system-ui,sans-serif;max-width:320px;"><div id="ch-load-spinner" style="width:36px;height:36px;border:3px solid #555;border-top:3px solid #96bc4b;border-radius:50%;margin:0 auto 14px;animation:chspin 1s linear infinite;"></div><div id="ch-load-msg" style="font-size:14px;line-height:1.5;"></div></div>';
-      const style = document.createElement('style');
-      style.textContent = '@keyframes chspin{to{transform:rotate(360deg)}}';
-      ov.appendChild(style);
-      document.body.appendChild(ov);
+  const ENGINES = {
+    'sf19': {
+      label: 'Stockfish 19',
+      kind: 'wasm',
+      maxDepth: 24,
+      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm',
+      asmUrl:  'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.asm.js'
+    },
+    'sf18': {
+      label: 'Stockfish 18',
+      kind: 'wasm',
+      maxDepth: 24,
+      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm',
+      asmUrl:  'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.asm.js'
+    },
+    'sf17': {
+      label: 'Stockfish 17',
+      kind: 'wasm',
+      maxDepth: 24,
+      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm',
+      asmUrl:  'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.asm.js'
+    },
+    'sf16': {
+      label: 'Stockfish 16',
+      kind: 'wasm',
+      maxDepth: 24,
+      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
+    },
+    'sf11': {
+      label: 'Stockfish 11',
+      kind: 'wasm',
+      maxDepth: 24,
+      jsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm',
+      asmUrl:  'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.asm.js'
+    },
+    'sf10': {
+      label: 'Stockfish 10',
+      kind: 'js',
+      maxDepth: 24,
+      url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.asm.js'
+    },
+    'sf8': {
+      label: 'Stockfish 8',
+      kind: 'js',
+      maxDepth: 24,
+      hash: 8,
+      url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/8/stockfish.js'
+    },
+    'lozza11': {
+      label: 'Lozza 11',
+      kind: 'js',
+      maxDepth: 12,
+      url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/11/lozza.js',
+      noMultiPV: true
+    },
+    'lozza3': {
+      label: 'Lozza 3',
+      kind: 'js',
+      maxDepth: 12,
+      url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/3/lozza.js',
+      noMultiPV: true
+    },
+    'lozza1': {
+      label: 'Lozza 1',
+      kind: 'js',
+      maxDepth: 12,
+      url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/1/lozza.js',
+      noMultiPV: true
+    },
+    'garbochess': {
+      label: 'Garbochess',
+      kind: 'js',
+      maxDepth: 12,
+      url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/garbochess/1/garbochess.js?v=4',
+      noMultiPV: true
     }
-    document.getElementById('ch-load-msg').textContent = msg;
+  };
+
+  let currentEngine = 'sf19';
+
+  let _loadingOverlay = null;
+  function showLoadingOverlay(label, percent) {
+    try {
+      if (!_loadingOverlay) {
+        _loadingOverlay = document.createElement('div');
+        _loadingOverlay.id = 'ch-loading-overlay';
+        _loadingOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:var(--ch-font,sans-serif);color:#fff;backdrop-filter:blur(3px);';
+        _loadingOverlay.innerHTML = '<div style="background:#1a1a1c;padding:22px 32px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;align-items:center;gap:12px;min-width:240px;"><div style="width:32px;height:32px;border:3px solid rgba(255,255,255,0.15);border-top-color:var(--ch-accent,#7fffb0);border-radius:50%;animation:ch-spin 0.8s linear infinite;"></div><div id="ch-loading-label" style="font-size:13px;font-weight:600;letter-spacing:0.3px;">Loading engine...</div><div id="ch-loading-pct" style="font-size:11px;color:rgba(255,255,255,0.55);font-variant-numeric:tabular-nums;">0%</div></div><style>@keyframes ch-spin{to{transform:rotate(360deg);}}</style>';
+        document.body.appendChild(_loadingOverlay);
+      }
+      const lbl = _loadingOverlay.querySelector('#ch-loading-label');
+      if (lbl && label != null) lbl.textContent = label;
+      const pct = _loadingOverlay.querySelector('#ch-loading-pct');
+      if (pct) pct.textContent = (percent == null ? '' : Math.max(0, Math.min(100, Math.round(percent))) + '%');
+      _loadingOverlay.style.display = 'flex';
+    } catch {}
   }
   function hideLoadingOverlay() {
-    const ov = document.getElementById('ch-loading-overlay');
-    if (ov) ov.remove();
+    try { if (_loadingOverlay) _loadingOverlay.style.display = 'none'; } catch {}
   }
 
-  async function fetchWithProgress(url, label) {
+  async function fetchWithProgress(url, onBytes) {
     const resp = await fetch(url);
-    const total = +resp.headers.get('content-length') || 0;
-    if (!total || !resp.body) {
-      showLoadingOverlay(label + '...');
-      return resp;
-    }
+    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + url);
+    const total = Number(resp.headers.get('Content-Length')) || 0;
     const reader = resp.body.getReader();
     const chunks = [];
-    let loaded = 0;
+    let received = 0;
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
       chunks.push(value);
-      loaded += value.length;
-      const pct = Math.round((loaded / total) * 100);
-      showLoadingOverlay(label + ' ' + pct + '%');
+      received += value.length;
+      try { onBytes(received, total); } catch {}
     }
-    const buf = new Uint8Array(loaded);
-    let pos = 0;
-    for (const c of chunks) { buf.set(c, pos); pos += c.length; }
-    return new Response(buf, { headers: resp.headers });
+    const buf = new Uint8Array(received);
+    let off = 0;
+    for (const c of chunks) { buf.set(c, off); off += c.length; }
+    return buf.buffer;
   }
 
   let _initP = null;
   async function initEngine() {
     if (sfReady) return;
     if (_initP) return _initP;
-    _initP = _doInitEngine();
+    _initP = _doInitEngine().catch(e => { _initP = null; throw e; });
     return _initP;
   }
   async function _doInitEngine() {
     if (sfWorker) return;
-    const base = 'https://unpkg.com/stockfish@18.0.8/bin/';
+    const engine = ENGINES[currentEngine] || ENGINES['sf19'];
     try {
-      showLoadingOverlay('Loading engine...');
-      const [jsCode, wasmBuf] = await Promise.all([
-        fetchWithProgress(base + 'stockfish-18-lite-single.js', 'Loading engine JS').then(r => r.text()),
-        fetchWithProgress(base + 'stockfish-18-lite-single.wasm', 'Loading engine WASM').then(r => r.arrayBuffer())
-      ]);
-      showLoadingOverlay('Starting engine...');
-      const boot = 'self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})))}};';
-      sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
-      sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
+      if (engine.kind === 'wasm') {
+        let jsBytes = 0, jsTotal = 0, wasmBytes = 0, wasmTotal = 0;
+        const updateProgress = () => {
+          const total = jsTotal + wasmTotal;
+          if (total > 0) {
+            const pct = ((jsBytes + wasmBytes) / total) * 100;
+            showLoadingOverlay(null, pct);
+          }
+        };
+        const [jsBuf, wasmBuf] = await Promise.all([
+          fetchWithProgress(engine.jsUrl, (r, t) => { jsBytes = r; jsTotal = t; updateProgress(); }),
+          fetchWithProgress(engine.wasmUrl, (r, t) => { wasmBytes = r; wasmTotal = t; updateProgress(); })
+        ]);
+        const jsCode = new TextDecoder().decode(jsBuf);
+        showLoadingOverlay(null, 100);
+        const boot = 'if(typeof SharedArrayBuffer==="undefined"){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+err);});}catch(err){self.postMessage("info string Stockfish boot error: "+err);}}}};';
+        sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
+        sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
+      } else {
+        const buf = await fetchWithProgress(engine.url, (r, t) => {
+          if (t > 0) showLoadingOverlay(null, (r / t) * 100);
+        });
+        const code = new TextDecoder().decode(buf);
+        showLoadingOverlay(null, 100);
+        sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+      }
       sfWorker.onerror = handleWorkerCrash;
       await uciCommand('uci', 'uciok');
-      uciSend('setoption name Hash value 64');
+      uciSend('setoption name Hash value ' + (engine.hash || 64));
       sfCurrentMultiPV = 1;
-      uciSend('setoption name MultiPV value 1');
+      if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
       await uciCommand('isready', 'readyok');
       sfReady = true;
-      installReadyokListener();
       hideLoadingOverlay();
+      lastEngineResponse = Date.now();
+      installReadyokListener();
     } catch (e) {
+      console.warn('[Chess Assist] engine init failed:', e);
+      try { if (sfWorker) sfWorker.terminate(); } catch {}
       sfWorker = null;
-      try {
-        showLoadingOverlay('Falling back to ASM engine...');
-        const r = await fetch(base + 'stockfish-18-asm.js');
-        const code = await r.text();
-        sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
-        sfWorker.onerror = handleWorkerCrash;
-        await uciCommand('uci', 'uciok');
-        uciSend('setoption name Hash value 64');
-        sfCurrentMultiPV = 1;
-        uciSend('setoption name MultiPV value 1');
-        await uciCommand('isready', 'readyok');
-        sfReady = true;
-        installReadyokListener();
-        hideLoadingOverlay();
-      } catch (e2) {
-        sfWorker = null;
-        hideLoadingOverlay();
+      if (engine.kind === 'wasm' && engine.asmUrl) {
+        try {
+          const r = await fetch(engine.asmUrl);
+          const code = await r.text();
+          sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+          sfWorker.onerror = handleWorkerCrash;
+          await uciCommand('uci', 'uciok');
+          uciSend('setoption name Hash value ' + (engine.hash || 64));
+          sfCurrentMultiPV = 1;
+          if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
+          await uciCommand('isready', 'readyok');
+          sfReady = true;
+          lastEngineResponse = Date.now();
+          installReadyokListener();
+          return;
+        } catch (e2) {
+          console.warn('[Chess Assist] asm fallback failed:', e2);
+          try { if (sfWorker) sfWorker.terminate(); } catch {}
+          sfWorker = null;
+        }
       }
+      hideLoadingOverlay();
+      throw e;
     }
+  }
+
+  async function switchEngine(newKey) {
+    if (!ENGINES[newKey] || newKey === currentEngine) { hideLoadingOverlay(); return; }
+    engineDepths[currentEngine] = ENGINE_DEPTH;
+    currentEngine = newKey;
+    showLoadingOverlay('Loading ' + (ENGINES[newKey].label || newKey) + '...');
+    if (typeof engineDepths[newKey] === 'number') ENGINE_DEPTH = engineDepths[newKey];
+    try {
+      if (activeSearchHandler && sfWorker) { sfWorker.removeEventListener('message', activeSearchHandler); activeSearchHandler = null; }
+      if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
+      if (sfWorker) { sfWorker.terminate(); }
+    } catch {}
+    sfWorker = null;
+    sfReady = false;
+    _initP = null;
+    isWaitingForReady = false;
+    if (pendingQuery) { try { pendingQuery.resolve([]); } catch {} pendingQuery = null; }
+    fenCache.clear();
+    lastEngineResponse = Date.now();
+    if (oppAbort) { oppAbort.aborted = true; oppAbort = null; }
+    processingMy = false;
+    processingOpp = false;
+    lastFen = '';
+    lastMovedFen = '';
+    lastOppFen = '';
+    lastOppMove = null;
+    lastOppQueryFen = '';
+    lastOppQueryAt = 0;
+    waitingForOpponent = false;
+    detection.lastOppEvalCp = null;
+    detection.lastOppEvalFen = null;
+    detection.lastMyEvalCp = null;
+    detection.lastMyEvalFen = null;
+    applyDepthCap();
+    try { await initEngine(); } catch (e) {
+      console.warn('[Chess Assist] switchEngine init failed:', e);
+      hideLoadingOverlay();
+      try { const es = document.getElementById('ch-engine'); if (es) es.disabled = false; } catch {}
+      return;
+    }
+    hideLoadingOverlay();
+    try { const es = document.getElementById('ch-engine'); if (es) es.disabled = false; } catch {}
+    tick();
+  }
+
+  function applyDepthCap() {
+    const cap = ENGINES[currentEngine]?.maxDepth || 24;
+    const changed = ENGINE_DEPTH > cap;
+    if (changed) ENGINE_DEPTH = cap;
+    const ds = document.getElementById('ch-depth');
+    const dv = document.getElementById('ch-depth-val');
+    if (ds) { ds.max = cap; if (+ds.value > cap) ds.value = ENGINE_DEPTH; }
+    if (dv) dv.textContent = ENGINE_DEPTH;
+    if (changed) saveSettings();
   }
 
   function installReadyokListener() {
@@ -584,12 +784,14 @@
     sfCurrentMultiPV = 1;
     _initP = null;
     fenCache.clear();
-    initEngine();
+    lastEngineResponse = Date.now();
+    initEngine().catch(err => console.warn('[Chess Assist] restart failed:', err));
   }
 
   let lastEngineResponse = Date.now();
   setInterval(() => {
     if (!sfWorker || !sfReady) return;
+    if (!activeSearchHandler && !isWaitingForReady) return;
     const silent = Date.now() - lastEngineResponse;
     if (silent > 15000) {
       console.warn('[Chess Assist] Engine unresponsive for ' + Math.round(silent / 1000) + 's, restarting...');
@@ -603,16 +805,22 @@
 
   function uciCommand(cmd, waitFor) {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => { reject(new Error('UCI timeout')); }, 10000);
+      const worker = sfWorker;
+      if (!worker) { reject(new Error('no worker')); return; }
+      const timeout = setTimeout(() => {
+        try { worker.removeEventListener('message', handler); } catch {}
+        reject(new Error('UCI timeout waiting for ' + waitFor));
+      }, 10000);
       const handler = (e) => {
+        lastEngineResponse = Date.now();
         if (typeof e.data === 'string' && e.data.startsWith(waitFor)) {
           clearTimeout(timeout);
-          sfWorker.removeEventListener('message', handler);
+          try { worker.removeEventListener('message', handler); } catch {}
           resolve(e.data);
         }
       };
-      sfWorker.addEventListener('message', handler);
-      uciSend(cmd);
+      worker.addEventListener('message', handler);
+      worker.postMessage(cmd);
     });
   }
 
@@ -649,21 +857,29 @@
       activeSearchHandler = null;
     }
     if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
-    if (sfCurrentMultiPV !== multiPV) {
-      sfCurrentMultiPV = multiPV;
-      uciSend('setoption name MultiPV value ' + multiPV);
+    const engine = ENGINES[currentEngine];
+    const effectiveMPV = engine?.noMultiPV ? 1 : multiPV;
+    if (sfCurrentMultiPV !== effectiveMPV && !engine?.noMultiPV) {
+      sfCurrentMultiPV = effectiveMPV;
+      uciSend('setoption name MultiPV value ' + effectiveMPV);
     }
     const moves = {};
     let gotBestmove = false;
+    let stopped = false;
+    const SOFT_TIMEOUT = engine?.noMultiPV ? 30000 : 12000;
     activeSearchTimeout = setTimeout(() => {
-      if (gotBestmove) return;
-      sfWorker.removeEventListener('message', handler);
-      activeSearchHandler = null;
-      activeSearchTimeout = null;
-      const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
-      if (results.length) setCachedEval(fen, results, multiPV);
-      resolve(results);
-    }, 4000);
+      if (gotBestmove || stopped) return;
+      stopped = true;
+      try { uciSend('stop'); } catch {}
+      setTimeout(() => {
+        if (gotBestmove) return;
+        try { sfWorker && sfWorker.removeEventListener('message', handler); } catch {}
+        activeSearchHandler = null;
+        activeSearchTimeout = null;
+        const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+        resolve(results);
+      }, 500);
+    }, SOFT_TIMEOUT);
     const handler = (e) => {
       const line = typeof e.data === 'string' ? e.data : '';
       lastEngineResponse = Date.now();
@@ -676,14 +892,14 @@
         const best = line.split(/\s+/)[1];
         if (best && best.length >= 4 && !moves[1]) moves[1] = { move: best.slice(0, 4), cp: null };
         const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
-        if (results.length) setCachedEval(fen, results, multiPV);
+        if (results.length && !stopped) setCachedEval(fen, results, effectiveMPV);
         resolve(results);
         return;
       }
-      const pvMatch = line.match(/multipv\s+(\d+).*?\bpv\s+(\S+)/);
-      if (pvMatch) {
-        const pvIdx = parseInt(pvMatch[1]);
-        const mv = pvMatch[2];
+      const pvMatchWithIdx = line.match(/multipv\s+(\d+).*?\bpv\s+(\S+)/);
+      if (pvMatchWithIdx) {
+        const pvIdx = parseInt(pvMatchWithIdx[1]);
+        const mv = pvMatchWithIdx[2];
         if (mv.length >= 4) {
           const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
           let cp = null;
@@ -692,6 +908,20 @@
             cp = parts[0] === 'mate' ? (parseInt(parts[1]) > 0 ? 99999 : -99999) : parseInt(parts[1]);
           }
           moves[pvIdx] = { move: mv.slice(0, 4), cp };
+        }
+      } else if (engine?.noMultiPV) {
+        const pvOnly = line.match(/\bpv\s+(\S+)/);
+        if (pvOnly) {
+          const mv = pvOnly[1];
+          if (mv.length >= 4) {
+            const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
+            let cp = null;
+            if (scoreMatch) {
+              const parts = scoreMatch[1].split(/\s+/);
+              cp = parts[0] === 'mate' ? (parseInt(parts[1]) > 0 ? 99999 : -99999) : parseInt(parts[1]);
+            }
+            moves[1] = { move: mv.slice(0, 4), cp };
+          }
         }
       }
     };
@@ -709,6 +939,7 @@
     if (!top.length) return null;
     const topCount = played.filter(m => m === top[0].move).length;
     if (topCount < REPEAT_THRESHOLD) return top[0];
+    if (ENGINES[currentEngine]?.noMultiPV) return top[0];
     const candidates = await queryLocal(fen, ENGINE_DEPTH, 3);
     if (!candidates.length) return top[0];
     let best = candidates[0], bestCount = Infinity;
@@ -741,7 +972,7 @@
     positionMoves.set(key, played);
   }
 
-  initEngine();
+  initEngine().catch(err => console.warn('[Chess Assist] initial engine load failed:', err));
 
   function clickSquare(sq) {
     const b = getBoard(); if (!b) return;
@@ -802,9 +1033,15 @@
         for (let pi = 0; pi < 8; pi++) {
           const promoWin = document.querySelector('.promotion-window, .promotion-area, [class*="promotion"]');
           if (!promoWin) { await new Promise(r => setTimeout(r, 150)); continue; }
-          const el = promoWin.querySelector(`.${color}${promoChar}, [class*="${color}${promoChar}"], [data-piece="${promoChar}"], [data-piece="${color}${promoChar}"]`)
-            || promoWin.querySelector(`[class*="${promoChar}"]`)
-            || promoWin.querySelector('[class*="queen"], [data-piece="q"], [data-piece="wq"], [data-piece="bq"]')
+          const el = promoWin.querySelector(`.promotion-piece.${color}${promoChar}`)
+            || promoWin.querySelector(`.promotion-piece[data-piece="${color}${promoChar}"]`)
+            || promoWin.querySelector(`.promotion-piece[data-piece="${promoChar}"]`)
+            || promoWin.querySelector(`[data-piece="${color}${promoChar}"]`)
+            || promoWin.querySelector(`.piece.${color}${promoChar}`)
+            || promoWin.querySelector(`.${color}${promoChar}`)
+            || promoWin.querySelector(`.promotion-piece.${color}q`)
+            || promoWin.querySelector(`.promotion-piece[data-piece="${color}q"]`)
+            || promoWin.querySelector(`[data-piece="${color}q"]`)
             || promoWin.children[0];
           if (el) {
             const r = el.getBoundingClientRect();
@@ -978,10 +1215,25 @@
   let processingMy = false, processingOpp = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false;
   let lastOppQueryFen = '', lastOppQueryAt = 0;
   let oppAbort = null;
-  let _lastSyncDetection = 0;
+  let _lastSyncDetection = 0, _lastInActive = false, _lastGip = false;
   async function tick() {
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection) return;
-    if (!inActiveGame()) return;
+    const _active = inActiveGame();
+    if (_active && !_lastInActive && window.chessHelper.autoPlay) {
+      lastFen = ''; lastMovedFen = ''; waitingForOpponent = false;
+      for (let i = 1; i <= 5; i++) setTimeout(tick, i * 1000);
+    }
+    _lastInActive = _active;
+    const _gip = gameInProgress();
+    if (_gip && !_lastGip && window.chessHelper.autoPlay) {
+      lastFen = ''; lastMovedFen = ''; waitingForOpponent = false;
+      for (let i = 1; i <= 5; i++) setTimeout(tick, i * 1000);
+    }
+    _lastGip = _gip;
+    const b = getBoard();
+    if (!b) return;
+    const _fenCheck = (() => { try { return b.game?.getFEN?.(); } catch { return null; } })();
+    if (!_fenCheck) return;
     if (window.chessHelper.detection && Date.now() - _lastSyncDetection > 2000) { _lastSyncDetection = Date.now(); syncDetectionGame(); }
     const myTurn = isMyTurn();
     if (myTurn === null) return;
@@ -990,6 +1242,10 @@
       waitingForOpponent = false;
       lastFen = '';
       const fen = getFEN();
+      if (fen) {
+        const _fenTurn = fen.split(' ')[1];
+        if (_fenTurn === getMyColor()) { processingOpp = false; return; }
+      }
       if (fen && fen === lastOppFen && lastOppMove) {
         if (!window.chessHelper.detection) return;
         if (detection.lastOppEvalFen === fen) return;
@@ -1005,19 +1261,25 @@
         try {
           const candidates = await queryLocal(fen, ENGINE_DEPTH, 1);
           if (abortCtrl.aborted) return;
+          if (getFEN() !== fen) return;
+          if (isMyTurn() === true) return;
           const om = candidates.length ? candidates[0].move : null;
           if (candidates.length && candidates[0].cp !== null) {
-            if (detection.lastMyEvalCp !== null && candidates[0].cp !== null && detection.lastMyEvalFen && detection.lastMyEvalFen !== fen) {
+            if (detection.lastMyEvalCp !== null && detection.lastMyEvalFen && detection.lastMyEvalFen !== fen) {
               const rawMyCpl = detection.lastMyEvalCp + candidates[0].cp;
               const myCpl = Number.isFinite(rawMyCpl) ? Math.min(500, Math.max(0, rawMyCpl)) : 500;
               moveLog.push({ color: getMyColor(), cpl: myCpl });
               recalcDetection();
-              detection.lastMyEvalCp = null; detection.lastMyEvalFen = null;
             }
+            detection.lastMyEvalCp = null; detection.lastMyEvalFen = null;
             detection.lastOppEvalCp = candidates[0].cp;
             detection.lastOppEvalFen = fen;
             saveDetectionState();
             if (window.chessHelper.showEval) updateEval(-candidates[0].cp, getMyColor());
+          } else if (candidates.length) {
+            detection.lastMyEvalCp = null; detection.lastMyEvalFen = null;
+            detection.lastOppEvalCp = null;
+            detection.lastOppEvalFen = fen;
           }
           lastOppFen = fen;
           lastOppMove = om;
@@ -1031,37 +1293,35 @@
     if (processingMy) return;
     lastOppFen = ''; lastOppMove = null;
     const fen = getFEN(); if (!fen) return;
+    { const _fenTurn = fen.split(' ')[1]; if (_fenTurn !== getMyColor()) return; }
     if (fen === lastFen) return;
-    if (waitingForOpponent && fen !== lastMovedFen) waitingForOpponent = false;
+    if (waitingForOpponent && fen !== lastMovedFen) waitingForOpponent = false; 
     if (window.chessHelper.autoPlay && fen === lastMovedFen) return;
 
     processingMy = true;
     try {
       thinkingEl.classList.add('active');
       const result = await fetchRemote(fen);
+      if (getFEN() !== fen) { thinkingEl.classList.remove('active'); return; }
+      if (isMyTurn() === false) { thinkingEl.classList.remove('active'); return; }
       thinkingEl.classList.remove('active');
       if (!result) return;
       const mv = result.move;
       updateEval(result.cp, getMyColor());
-      if (detection.lastOppEvalCp !== null && result.cp != null && detection.lastOppEvalFen && detection.lastOppEvalFen !== fen) {
+      if (result.cp != null && detection.lastOppEvalCp !== null && detection.lastOppEvalFen && detection.lastOppEvalFen !== fen) {
         const rawCpl = detection.lastOppEvalCp + result.cp;
         const cpl = Number.isFinite(rawCpl) ? Math.min(500, Math.max(0, rawCpl)) : 500;
         const oppColor = getMyColor() === 'w' ? 'b' : 'w';
         moveLog.push({ color: oppColor, cpl });
         recalcDetection();
-        detection.lastOppEvalCp = null;
-        detection.lastOppEvalFen = null;
       }
+      detection.lastOppEvalCp = null; detection.lastOppEvalFen = null;
       if (result.cp !== null) { detection.lastMyEvalCp = result.cp; detection.lastMyEvalFen = fen; saveDetectionState(); }
       lastFen = fen;
       if (window.chessHelper.hiddenArrow) { drawShading(mv); clearArrows(); }
       else if (window.chessHelper.showArrow) { drawNativeArrow(mv); clearShading(); }
-      if (window.chessHelper.showOpponent) {
-        const om = await queryOpponentBest(fen);
-        if (om) drawOpponentArrow(om);
-        else clearOpponentArrow();
-      } else clearOpponentArrow();
-      if (window.chessHelper.autoPlay) {
+      clearOpponentArrow();
+      if (window.chessHelper.autoPlay && gameInProgress()) {
         if (DELAY_ENABLED) {
           const delay = (DELAY_MIN + Math.random() * (DELAY_MAX - DELAY_MIN)) * 1000;
           await new Promise(r => setTimeout(r, delay));
@@ -1114,6 +1374,7 @@
       <button class="ch-tab active" data-tab="gameplay">Gameplay</button>
       <button class="ch-tab" data-tab="detection">Detection</button>
       <button class="ch-tab" data-tab="skins">Skins</button>
+      <button class="ch-tab" data-tab="settings">Settings</button>
     </div>
     <div class="ch-tab-content active" id="ch-tab-gameplay">
     <div class="ch-thinking" id="ch-thinking">Thinking...</div>
@@ -1215,7 +1476,35 @@
       </div>
       <button class="ch-detect-reset" id="ch-skins-reset">Reset all skins</button>
     </div>
-    <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;">made by <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> · <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Terms &amp; Disclaimer</a></div>
+    <div class="ch-tab-content" id="ch-tab-settings">
+      <div>
+        <div class="ch-row"><span class="ch-label">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
+        <select id="ch-engine" style="width:100%;padding:6px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;color-scheme:dark;">
+          <option value="sf19" style="background:#1a1a1c;color:#fff;">Stockfish 19</option>
+          <option value="sf18" style="background:#1a1a1c;color:#fff;">Stockfish 18</option>
+          <option value="sf17" style="background:#1a1a1c;color:#fff;">Stockfish 17</option>
+          <option value="sf16" style="background:#1a1a1c;color:#fff;">Stockfish 16</option>
+          <option value="sf11" style="background:#1a1a1c;color:#fff;">Stockfish 11</option>
+          <option value="sf10" style="background:#1a1a1c;color:#fff;">Stockfish 10</option>
+          <option value="sf8" style="background:#1a1a1c;color:#fff;">Stockfish 8</option>
+          <option value="lozza11" style="background:#1a1a1c;color:#fff;">Lozza 11</option>
+          <option value="lozza3" style="background:#1a1a1c;color:#fff;">Lozza 3</option>
+          <option value="lozza1" style="background:#1a1a1c;color:#fff;">Lozza 1</option>
+          <option value="garbochess" style="background:#1a1a1c;color:#fff;">Garbochess</option>
+        </select>
+        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10-18) are lighter and faster on slow devices. Lozza (1/3/11) and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12.</div>
+      </div>
+      <div style="margin-top:6px">
+      <div style="margin-top:4px">
+        <button class="ch-btn" id="ch-reset-binds" style="width:100%;padding:7px 0;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-family:var(--ch-font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;">Reset keybinds</button>
+      </div>
+      <div style="margin-top:6px">
+        <div class="ch-row"><span class="ch-label">Save on reload</span><span class="ch-info" data-tip="persist">i</span><label class="ch-switch"><input type="checkbox" id="ch-persist"><span class="ch-slider"></span></label></div>
+        <div class="ch-tooltip" id="tip-persist">When on, your settings (toggles, depth, keybinds, position) persist across page reloads. Turn off to make changes only for this session.</div>
+      </div>
+      </div>
+    </div>
+    <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;">made by <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> &middot; <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Terms &amp; Disclaimer</a></div>
   `;
   const wrap = document.createElement('div'); wrap.id = 'chess-helper-wrap';
   const evalBar = document.createElement('div'); evalBar.id = 'ch-eval-bar';
@@ -1445,6 +1734,7 @@
     if (!dragging) return;
     dragging = false;
     if (!dragMoved) { wrap.classList.toggle('visible'); positionPanel(); }
+    else saveSettings();
   }
   document.addEventListener('mouseup', bubbleUp);
   document.addEventListener('touchend', bubbleUp);
@@ -1486,14 +1776,46 @@
     panelX = t.clientX - panelSX; panelY = t.clientY - panelSY;
     positionPanel();
   });
-  document.addEventListener('mouseup', () => { panelDragging = false; });
-  document.addEventListener('touchend', () => { panelDragging = false; });
+  document.addEventListener('mouseup', () => { if (panelDragging && panelDragMoved) saveSettings(); panelDragging = false; });
+  document.addEventListener('touchend', () => { if (panelDragging && panelDragMoved) saveSettings(); panelDragging = false; });
 
 
   panel.querySelector('#ch-depth').oninput = (e) => {
     ENGINE_DEPTH = parseInt(e.target.value);
+    engineDepths[currentEngine] = ENGINE_DEPTH;
     panel.querySelector('#ch-depth-val').textContent = ENGINE_DEPTH;
     saveSettings();
+  };
+  const engineSelect = panel.querySelector('#ch-engine');
+  engineSelect.value = currentEngine;
+  engineSelect.onchange = (e) => {
+    const newKey = e.target.value;
+    engineSelect.disabled = true;
+    const reenable = () => { try { engineSelect.disabled = false; } catch {} };
+    Promise.resolve(switchEngine(newKey)).then(() => { saveSettings(); reenable(); }, reenable);
+    setTimeout(reenable, 30000);
+  };
+  const resetBindsBtn = panel.querySelector('#ch-reset-binds');
+  if (resetBindsBtn) resetBindsBtn.onclick = () => {
+    Object.keys(binds).forEach(k => { binds[k] = null; });
+    panel.querySelectorAll('.ch-keybind[data-bind]').forEach(el => { el.textContent = 'Press keys...'; });
+    saveSettings();
+  };
+  const persistToggle = panel.querySelector('#ch-persist');
+  persistToggle.checked = persistSettings;
+  persistToggle.onchange = (e) => {
+    persistSettings = e.target.checked;
+    if (persistSettings) {
+      try { localStorage.setItem('ch-persist', '1'); } catch {}
+      saveSettings();
+    } else {
+      try {
+        localStorage.removeItem('ch-settings');
+        localStorage.removeItem('ch-skins');
+        localStorage.removeItem('ch-detection-games-v1');
+        localStorage.setItem('ch-persist', '0');
+      } catch {}
+    }
   };
   panel.querySelector('#ch-delay-toggle').onchange = (e) => {
     DELAY_ENABLED = e.target.checked;
@@ -1518,15 +1840,25 @@
   };
   panel.querySelector('#ch-arrow').onchange = (e) => {
     window.chessHelper.showArrow = e.target.checked;
-    if (!e.target.checked) clearArrows();
-    else { lastFen = ''; tick(); }
     saveSettings();
+    if (!e.target.checked) { clearArrows(); return; }
+    const fen = getFEN();
+    if (fen && isMyTurn() === true) {
+      const cached = getCachedEval(fen, 1);
+      if (cached && cached.length) { drawNativeArrow(cached[0].move); clearShading(); return; }
+    }
+    lastFen = ''; tick();
   };
   panel.querySelector('#ch-hidden').onchange = (e) => {
     window.chessHelper.hiddenArrow = e.target.checked;
-    if (!e.target.checked) clearShading();
-    else { lastFen = ''; tick(); }
     saveSettings();
+    if (!e.target.checked) { clearShading(); return; }
+    const fen = getFEN();
+    if (fen && isMyTurn() === true) {
+      const cached = getCachedEval(fen, 1);
+      if (cached && cached.length) { drawShading(cached[0].move); clearArrows(); return; }
+    }
+    lastFen = ''; tick();
   };
   panel.querySelector('#ch-auto').onchange = (e) => {
     window.chessHelper.autoPlay = e.target.checked;
@@ -1568,9 +1900,15 @@
   };
   panel.querySelector('#ch-opponent').onchange = (e) => {
     window.chessHelper.showOpponent = e.target.checked;
-    if (!e.target.checked) clearOpponentArrow();
-    else { lastFen = ''; tick(); }
     saveSettings();
+    if (!e.target.checked) { clearOpponentArrow(); return; }
+    const fen = getFEN();
+    if (fen) {
+      const probeFen = isMyTurn() === true ? flipFEN(fen) : fen;
+      const cached = getCachedEval(probeFen, 1);
+      if (cached && cached.length) { drawOpponentArrow(cached[0].move); return; }
+    }
+    lastFen = ''; lastOppFen = ''; tick();
   };
   panel.querySelector('#ch-eval').onchange = (e) => {
     window.chessHelper.showEval = e.target.checked;
@@ -1593,8 +1931,9 @@
       }
     } else {
       if (autoPlayBeforeHide) {
-        window.chessHelper.autoPlay = true;
-        panel.querySelector('#ch-auto').checked = true;
+        const cb = panel.querySelector('#ch-auto');
+        cb.checked = true;
+        cb.dispatchEvent(new Event('change'));
       }
       lastFen = ''; tick();
     }
@@ -1772,6 +2111,7 @@
       const ds = panel.querySelector('#ch-depth'); if (ds) ds.value = ENGINE_DEPTH;
       const dv = panel.querySelector('#ch-depth-val'); if (dv) dv.textContent = ENGINE_DEPTH;
     }
+    if (saved.engineDepths && typeof saved.engineDepths === 'object') Object.assign(engineDepths, saved.engineDepths);
     if (typeof saved.delayEnabled === 'boolean') {
       DELAY_ENABLED = saved.delayEnabled;
       const dt = panel.querySelector('#ch-delay-toggle'); if (dt) dt.checked = DELAY_ENABLED;
@@ -1779,6 +2119,15 @@
     }
     if (typeof saved.delayMin === 'number') { DELAY_MIN = saved.delayMin; delayMinSlider.value = DELAY_MIN; delayMinVal.textContent = DELAY_MIN + 's'; }
     if (typeof saved.delayMax === 'number') { DELAY_MAX = saved.delayMax; delayMaxSlider.value = DELAY_MAX; delayMaxVal.textContent = DELAY_MAX + 's'; }
+    if (DELAY_MIN > DELAY_MAX) {
+      const t = DELAY_MIN; DELAY_MIN = DELAY_MAX; DELAY_MAX = t;
+      delayMinSlider.value = DELAY_MIN; delayMinVal.textContent = DELAY_MIN + 's';
+      delayMaxSlider.value = DELAY_MAX; delayMaxVal.textContent = DELAY_MAX + 's';
+    }
+    if (typeof saved.engine === 'string' && ENGINES[saved.engine]) {
+      currentEngine = saved.engine;
+      const sel = panel.querySelector('#ch-engine'); if (sel) sel.value = currentEngine;
+    }
     if (saved.detTarget === 'w') {
       detTarget = 'w';
       panel.querySelector('#ch-det-white').style.background = 'var(--ch-accent)';
@@ -1795,6 +2144,16 @@
         }
       }
     }
+    if (saved.bubblePos && typeof saved.bubblePos.x === 'number' && typeof saved.bubblePos.y === 'number') {
+      ox = Math.max(0, Math.min(saved.bubblePos.x, innerWidth - 52));
+      oy = Math.max(0, Math.min(saved.bubblePos.y, innerHeight - 52));
+      setPos();
+    }
+    if (saved.panelPos && typeof saved.panelPos.x === 'number' && typeof saved.panelPos.y === 'number') {
+      panelX = saved.panelPos.x;
+      panelY = saved.panelPos.y;
+    }
+    applyDepthCap();
   }
 
   console.log('chess helper loaded');
