@@ -34,6 +34,8 @@ Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 
 ## Install — pick one
 
+> ⚠️ **chess.com only.** Chess Assist is built against chess.com's DOM and game API. It will not work on lichess.org, chess24, chesstempo, or any other chess site.
+
 There are three ways to install Chess Assist. Pick whichever works for you:
 
 ### Use warning and disclaimer
