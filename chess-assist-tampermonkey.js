@@ -1506,7 +1506,7 @@
     </div>
     <div>
       <div class="ch-row"><span class="ch-label">Voice moves</span><span class="ch-info" data-tip="voice">i</span><span class="ch-keybind" data-bind="voice">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-voice"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-voice">Speaks the best move out loud each turn — great with headphones so you don't need to look at arrows. Uses your browser's built-in voices. Pick voice / rate / volume below, and hit Test to preview.</div>
+      <div class="ch-tooltip" id="tip-voice">Speaks the best move through your headphones each turn. Nothing shows on screen and no arrows need to be drawn — if anyone's watching your screen they can't spot it. Uses your browser's built-in voices; pick voice, speed, and volume below.</div>
       <div id="ch-voice-sliders" style="display:none">
         <div style="margin-top:6px;"><div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Voice</div>
           <div id="ch-voice-pick-wrap" style="position:relative;width:100%;">
