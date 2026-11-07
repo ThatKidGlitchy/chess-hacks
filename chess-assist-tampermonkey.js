@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.3.1
+// @version      1.4.0
 // @description  Chess.com assistant with 14 selectable engines (Stockfish 8-19, Lozza, Garbochess), auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection, custom skins, and per-engine depth memory.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -11,6 +11,7 @@
 // @match        *://*.chess.com/*
 // @grant        none
 // ==/UserScript==
+
 
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
@@ -93,7 +94,10 @@
   `;
   document.head.appendChild(style);
 
-  window.chessHelper = { autoPlay: false, showArrow: false, hiddenArrow: false, showOpponent: false, showEval: false, detection: true };
+  window.chessHelper = { autoPlay: false, showArrow: false, hiddenArrow: false, showOpponent: false, showEval: false, detection: true, voice: false };
+  let VOICE_RATE = 1.0, VOICE_VOLUME = 1.0, VOICE_NAME = '';
+  let voiceUnlocked = false;
+  let lastSpokenText = '', lastSpokenFen = '', lastSpokenMove = '';
   let persistSettings = localStorage.getItem('ch-persist') !== '0';
 
   function loadSettings() {
@@ -107,7 +111,8 @@
     if (!persistSettings) return;
     try {
       localStorage.setItem('ch-settings', JSON.stringify({
-        toggles: { autoPlay: window.chessHelper.autoPlay, showArrow: window.chessHelper.showArrow, hiddenArrow: window.chessHelper.hiddenArrow, showOpponent: window.chessHelper.showOpponent, showEval: window.chessHelper.showEval, detection: window.chessHelper.detection },
+        toggles: { autoPlay: window.chessHelper.autoPlay, showArrow: window.chessHelper.showArrow, hiddenArrow: window.chessHelper.hiddenArrow, showOpponent: window.chessHelper.showOpponent, showEval: window.chessHelper.showEval, detection: window.chessHelper.detection, voice: window.chessHelper.voice },
+        voiceRate: VOICE_RATE, voiceVolume: VOICE_VOLUME, voiceName: VOICE_NAME,
         depth: ENGINE_DEPTH, engineDepths: engineDepths, delayMin: DELAY_MIN, delayMax: DELAY_MAX, delayEnabled: DELAY_ENABLED,
         engine: currentEngine,
         detTarget: detTarget,
@@ -117,6 +122,77 @@
       }));
     } catch {}
   }
+
+  // ---- Voice narration (Web Speech API) ----
+  const PIECE_WORDS = { p: 'pawn', n: 'knight', b: 'bishop', r: 'rook', q: 'queen', k: 'king' };
+  const DIGIT_WORDS = { '1': 'one', '2': 'two', '3': 'three', '4': 'four', '5': 'five', '6': 'six', '7': 'seven', '8': 'eight' };
+  function pieceAtSquare(fen, sq) {
+    try {
+      const rows = fen.split(' ')[0].split('/');
+      const file = sq.charCodeAt(0) - 97;
+      const rank = parseInt(sq[1], 10);
+      const row = rows[8 - rank] || '';
+      let col = 0;
+      for (const ch of row) {
+        if (ch >= '1' && ch <= '8') col += parseInt(ch, 10);
+        else { if (col === file) return ch; col++; }
+      }
+    } catch {}
+    return null;
+  }
+  function sqToSpeech(sq) { return sq[0].toUpperCase() + ' ' + (DIGIT_WORDS[sq[1]] || sq[1]); }
+  function moveToSpeech(fen, move, mate) {
+    if (!move || move.length < 4) return '';
+    const from = move.slice(0, 2), to = move.slice(2, 4);
+    // If engine didn't specify a promo char but this is a promotion rank, default to queen.
+    const promo = move.length > 4 ? move[4].toLowerCase() : (isPromotion(fen, from, to) ? 'q' : null);
+    const piece = (pieceAtSquare(fen, from) || 'P').toLowerCase();
+    const target = pieceAtSquare(fen, to);
+    const isCastle = piece === 'k' && Math.abs(from.charCodeAt(0) - to.charCodeAt(0)) === 2;
+    let out;
+    if (isCastle) {
+      out = 'castle ' + (to[0] === 'g' ? 'kingside' : 'queenside');
+    } else if (target) {
+      // Capture — name the piece being taken.
+      const targetWord = PIECE_WORDS[target.toLowerCase()] || 'piece';
+      out = (PIECE_WORDS[piece] || 'pawn') + ' ' + sqToSpeech(from) + ' takes ' + targetWord + ' on ' + sqToSpeech(to);
+    } else {
+      out = (PIECE_WORDS[piece] || 'pawn') + ' ' + sqToSpeech(from) + ' to ' + sqToSpeech(to);
+    }
+    if (promo) out += ', promote to ' + (PIECE_WORDS[promo] || 'queen');
+    // Mate in 1 → "...checkmate". Mate in 2+ → "...mate in N".
+    if (mate && mate > 0) {
+      out += mate === 1 ? ', checkmate' : ', mate in ' + mate;
+    }
+    return out;
+  }
+  function unlockVoice() {
+    if (voiceUnlocked) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      const u = new SpeechSynthesisUtterance(''); u.volume = 0;
+      synth.speak(u);
+      voiceUnlocked = true;
+    } catch {}
+  }
+  function speakText(text) {
+    if (!text) return;
+    try {
+      const synth = window.speechSynthesis;
+      if (!synth) return;
+      synth.cancel();
+      const u = new SpeechSynthesisUtterance(text);
+      u.rate = VOICE_RATE;
+      u.volume = VOICE_VOLUME;
+      if (VOICE_NAME) {
+        const v = (synth.getVoices() || []).find(x => x.name === VOICE_NAME);
+        if (v) u.voice = v;
+      }
+      synth.speak(u);
+    } catch (e) { console.warn('[Chess Assist] speak error:', e); }
+  }
+  function stopVoice() { try { window.speechSynthesis && window.speechSynthesis.cancel(); } catch {} }
 
   const detection = { oppMoves: 0, totalCpl: 0, bestMoves: 0, topThree: 0, blunders: 0, lastOppEvalCp: null, lastOppEvalFen: null, lastMyEvalCp: null, lastMyEvalFen: null };
   const moveLog = [];
@@ -902,12 +978,13 @@
         const mv = pvMatchWithIdx[2];
         if (mv.length >= 4) {
           const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
-          let cp = null;
+          let cp = null, mate = null;
           if (scoreMatch) {
             const parts = scoreMatch[1].split(/\s+/);
-            cp = parts[0] === 'mate' ? (parseInt(parts[1]) > 0 ? 99999 : -99999) : parseInt(parts[1]);
+            if (parts[0] === 'mate') { mate = parseInt(parts[1]); cp = mate > 0 ? 99999 : -99999; }
+            else cp = parseInt(parts[1]);
           }
-          moves[pvIdx] = { move: mv.slice(0, 4), cp };
+          moves[pvIdx] = { move: mv.slice(0, 4), cp, mate };
         }
       } else if (engine?.noMultiPV) {
         const pvOnly = line.match(/\bpv\s+(\S+)/);
@@ -915,12 +992,13 @@
           const mv = pvOnly[1];
           if (mv.length >= 4) {
             const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
-            let cp = null;
+            let cp = null, mate = null;
             if (scoreMatch) {
               const parts = scoreMatch[1].split(/\s+/);
-              cp = parts[0] === 'mate' ? (parseInt(parts[1]) > 0 ? 99999 : -99999) : parseInt(parts[1]);
+              if (parts[0] === 'mate') { mate = parseInt(parts[1]); cp = mate > 0 ? 99999 : -99999; }
+              else cp = parseInt(parts[1]);
             }
-            moves[1] = { move: mv.slice(0, 4), cp };
+            moves[1] = { move: mv.slice(0, 4), cp, mate };
           }
         }
       }
@@ -1217,7 +1295,7 @@
   let oppAbort = null;
   let _lastSyncDetection = 0, _lastInActive = false, _lastGip = false;
   async function tick() {
-    if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection) return;
+    if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice) return;
     const _active = inActiveGame();
     if (_active && !_lastInActive && window.chessHelper.autoPlay) {
       lastFen = ''; lastMovedFen = ''; waitingForOpponent = false;
@@ -1321,6 +1399,22 @@
       if (window.chessHelper.hiddenArrow) { drawShading(mv); clearArrows(); }
       else if (window.chessHelper.showArrow) { drawNativeArrow(mv); clearShading(); }
       clearOpponentArrow();
+      if (window.chessHelper.voice) {
+        // Bulletproof: speak only OUR move (green arrow), never the opponent's.
+        const curFen = getFEN();
+        const myColor = getMyColor();
+        const fromPiece = pieceAtSquare(fen, mv.slice(0, 2));
+        const pieceIsMine = fromPiece && ((fromPiece === fromPiece.toUpperCase()) === (myColor === 'w'));
+        const stillMyTurn = curFen && curFen.split(' ')[1] === myColor && isMyTurn() === true;
+        const boardUnchanged = curFen && curFen.split(' ')[0] === fen.split(' ')[0];
+        if (pieceIsMine && stillMyTurn && boardUnchanged) {
+          const text = moveToSpeech(fen, mv, result.mate);
+          if (text && (text !== lastSpokenText || mv !== lastSpokenMove)) {
+            lastSpokenText = text; lastSpokenFen = fen; lastSpokenMove = mv;
+            speakText(text);
+          }
+        }
+      }
       if (window.chessHelper.autoPlay && gameInProgress()) {
         if (DELAY_ENABLED) {
           const delay = (DELAY_MIN + Math.random() * (DELAY_MAX - DELAY_MIN)) * 1000;
@@ -1347,7 +1441,7 @@
   let _mutDebounce = null;
   const obs = new MutationObserver(() => {
     if (drawing) return;
-    if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection) return;
+    if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice) return;
     if (_mutDebounce) return;
     _mutDebounce = setTimeout(() => { _mutDebounce = null; tick(); }, 120);
   });
@@ -1410,7 +1504,22 @@
       <div class="ch-row"><span class="ch-label">Win percent</span><span class="ch-info" data-tip="eval">i</span><span class="ch-keybind" data-bind="eval">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-eval"><span class="ch-slider"></span></label></div>
       <div class="ch-tooltip" id="tip-eval">Shows a live win probability bar next to the panel. Updates every position using Stockfish's centipawn evaluation.</div>
     </div>
-    <button class="ch-btn ch-btn-primary" id="ch-analyze">Analyze once</button>
+    <div>
+      <div class="ch-row"><span class="ch-label">Voice moves</span><span class="ch-info" data-tip="voice">i</span><span class="ch-keybind" data-bind="voice">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-voice"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-voice">Speaks the best move out loud each turn — great with headphones so you don't need to look at arrows. Uses your browser's built-in voices. Pick voice / rate / volume below, and hit Test to preview.</div>
+      <div id="ch-voice-sliders" style="display:none">
+        <div style="margin-top:6px;"><div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Voice</div>
+          <div id="ch-voice-pick-wrap" style="position:relative;width:100%;">
+            <button type="button" id="ch-voice-pick-btn" style="width:100%;padding:7px 24px 7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;">Default<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);opacity:0.55;pointer-events:none;"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+            <div id="ch-voice-pick-list" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;max-height:240px;overflow-y:auto;background:#1a1a1c;border:1px solid rgba(255,255,255,0.1);border-radius:8px;z-index:100002;box-shadow:0 10px 30px rgba(0,0,0,0.6);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;"></div>
+          </div>
+        </div>
+        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label">Speed</span><input type="range" class="ch-range" id="ch-voice-rate" min="0.5" max="2" value="1" step="0.1"><span class="ch-depth-val" id="ch-voice-rate-val">1.0</span></div>
+        <div class="ch-depth-row" style="margin-top:4px"><span class="ch-depth-label">Vol</span><input type="range" class="ch-range" id="ch-voice-vol" min="0" max="1" value="1" step="0.05"><span class="ch-depth-val" id="ch-voice-vol-val">100%</span></div>
+        <div class="ch-row" style="margin-top:6px;"><button class="ch-btn" id="ch-voice-test" style="flex:1;">Say once</button><span class="ch-keybind" data-bind="voiceRepeat" style="margin-left:8px;">Press keys...</span></div>
+      </div>
+    </div>
+    <div class="ch-row" style="margin-top:2px;"><button class="ch-btn ch-btn-primary" id="ch-analyze" style="flex:1;">Analyze once</button><span class="ch-keybind" data-bind="analyze" style="margin-left:8px;">Press keys...</span></div>
     <div>
       <div class="ch-row" style="margin-top:2px"><span class="ch-label">Hide all</span><span class="ch-info" data-tip="hide">i</span><span class="ch-keybind" data-bind="hide">Press keys...</span></div>
       <div class="ch-tooltip" id="tip-hide">Hides everything — the icon, panel, arrows, and shading. Press your keybind again to bring it all back.</div>
@@ -1719,7 +1828,7 @@
     const p = e.touches ? e.touches[0] : e;
     sx = p.clientX - ox; sy = p.clientY - oy;
   }
-  bubble.addEventListener('mousedown', bubbleDown);
+  bubble.addEventListener('mousedown', (e) => { unlockVoice(); bubbleDown(e); });
   bubble.addEventListener('touchstart', bubbleDown, { passive: false });
   function bubbleMove(e) {
     if (!dragging) return; dragMoved = true;
@@ -1917,13 +2026,92 @@
     saveSettings();
   };
 
+  // ---- Voice controls ----
+  const voiceBtn = panel.querySelector('#ch-voice-pick-btn');
+  const voiceList = panel.querySelector('#ch-voice-pick-list');
+  function defaultVoiceName() {
+    try {
+      const voices = (window.speechSynthesis && window.speechSynthesis.getVoices()) || [];
+      const d = voices.find(v => v.default) || voices[0];
+      return d ? d.name : '';
+    } catch { return ''; }
+  }
+  function setVoiceLabel(name) {
+    const resolved = name || defaultVoiceName();
+    const txt = resolved ? resolved + (name ? '' : ' (default)') : 'Default';
+    voiceBtn.firstChild.nodeValue = txt;
+  }
+  function populateVoicePicker() {
+    if (!voiceList || !window.speechSynthesis) return;
+    const voices = window.speechSynthesis.getVoices() || [];
+    const items = [{ name: '', label: 'Default' }].concat(
+      voices.map(v => ({ name: v.name, label: `${v.name} (${v.lang})` }))
+    );
+    voiceList.innerHTML = items.map(it => {
+      const safe = it.name.replace(/"/g, '&quot;');
+      const active = it.name === VOICE_NAME ? 'background:rgba(129,182,76,0.15);' : '';
+      return `<div class="ch-voice-item" data-name="${safe}" title="${it.label.replace(/"/g,'&quot;')}" style="padding:7px 10px;font-size:11.5px;line-height:1.3;color:#fff;cursor:pointer;word-break:break-word;${active}">${it.label}</div>`;
+    }).join('');
+    voiceList.querySelectorAll('.ch-voice-item').forEach(el => {
+      el.onmouseenter = () => { if (el.dataset.name !== VOICE_NAME) el.style.background = 'rgba(255,255,255,0.08)'; };
+      el.onmouseleave = () => { el.style.background = el.dataset.name === VOICE_NAME ? 'rgba(129,182,76,0.15)' : ''; };
+      el.onclick = () => {
+        VOICE_NAME = el.dataset.name;
+        setVoiceLabel(VOICE_NAME);
+        voiceList.style.display = 'none';
+        populateVoicePicker();
+        saveSettings();
+      };
+    });
+    setVoiceLabel(VOICE_NAME);
+  }
+  if (window.speechSynthesis) {
+    populateVoicePicker();
+    window.speechSynthesis.onvoiceschanged = populateVoicePicker;
+  }
+  voiceBtn.onclick = (e) => {
+    e.stopPropagation();
+    unlockVoice();
+    voiceList.style.display = voiceList.style.display === 'none' ? 'block' : 'none';
+  };
+  document.addEventListener('click', (e) => {
+    if (!panel.querySelector('#ch-voice-pick-wrap').contains(e.target)) voiceList.style.display = 'none';
+  });
+  panel.querySelector('#ch-voice').onchange = (e) => {
+    window.chessHelper.voice = e.target.checked;
+    panel.querySelector('#ch-voice-sliders').style.display = e.target.checked ? '' : 'none';
+    if (e.target.checked) { unlockVoice(); lastFen = ''; tick(); }
+    else stopVoice();
+    saveSettings();
+  };
+  const voiceRateSlider = panel.querySelector('#ch-voice-rate');
+  const voiceRateVal = panel.querySelector('#ch-voice-rate-val');
+  voiceRateSlider.oninput = (e) => {
+    VOICE_RATE = parseFloat(e.target.value);
+    voiceRateVal.textContent = VOICE_RATE.toFixed(1);
+    saveSettings();
+  };
+  const voiceVolSlider = panel.querySelector('#ch-voice-vol');
+  const voiceVolVal = panel.querySelector('#ch-voice-vol-val');
+  voiceVolSlider.oninput = (e) => {
+    VOICE_VOLUME = parseFloat(e.target.value);
+    voiceVolVal.textContent = Math.round(VOICE_VOLUME * 100) + '%';
+    saveSettings();
+  };
+  function sayOnce() {
+    unlockVoice();
+    if (lastSpokenText) speakText(lastSpokenText);
+    else speakText('knight G one to F three');
+  }
+  panel.querySelector('#ch-voice-test').onclick = sayOnce;
+
   let uiHidden = false;
   let autoPlayBeforeHide = false;
   function toggleUI() {
     uiHidden = !uiHidden;
     root.style.display = uiHidden ? 'none' : '';
     if (uiHidden) {
-      clearArrows(); clearShading(); clearOpponentArrow();
+      clearArrows(); clearShading(); clearOpponentArrow(); stopVoice();
       autoPlayBeforeHide = window.chessHelper.autoPlay;
       if (autoPlayBeforeHide) {
         window.chessHelper.autoPlay = false;
@@ -1939,7 +2127,7 @@
     }
   }
 
-  const binds = { hide: null, arrow: null, hidden: null, auto: null, delay: null, opponent: null, eval: null };
+  const binds = { hide: null, arrow: null, hidden: null, auto: null, delay: null, opponent: null, eval: null, voice: null, voiceRepeat: null, analyze: null };
   let recordingBind = null;
   let recordingHeldMods = null;
 
@@ -2032,7 +2220,7 @@
   });
 
   function toggleBind(name) {
-    const map = { arrow: '#ch-arrow', hidden: '#ch-hidden', auto: '#ch-auto', delay: '#ch-delay-toggle', opponent: '#ch-opponent', eval: '#ch-eval' };
+    const map = { arrow: '#ch-arrow', hidden: '#ch-hidden', auto: '#ch-auto', delay: '#ch-delay-toggle', opponent: '#ch-opponent', eval: '#ch-eval', voice: '#ch-voice' };
     const cb = panel.querySelector(map[name]);
     if (!cb) return;
     cb.checked = !cb.checked;
@@ -2049,6 +2237,8 @@
 
   function fireModBind(name) {
     if (name === 'hide') { toggleUI(); return true; }
+    if (name === 'voiceRepeat') { sayOnce(); return true; }
+    if (name === 'analyze') { panel.querySelector('#ch-analyze').click(); return true; }
     toggleBind(name); return true;
   }
 
@@ -2078,6 +2268,9 @@
     if (matchesKey(e, binds.delay)) { e.preventDefault(); toggleBind('delay'); return; }
     if (matchesKey(e, binds.opponent)) { e.preventDefault(); toggleBind('opponent'); return; }
     if (matchesKey(e, binds.eval)) { e.preventDefault(); toggleBind('eval'); return; }
+    if (matchesKey(e, binds.voice)) { e.preventDefault(); toggleBind('voice'); return; }
+    if (matchesKey(e, binds.voiceRepeat)) { e.preventDefault(); sayOnce(); return; }
+    if (matchesKey(e, binds.analyze)) { e.preventDefault(); panel.querySelector('#ch-analyze').click(); return; }
   });
 
   document.addEventListener('keyup', (e) => {
@@ -2090,7 +2283,7 @@
     if (e.key !== soloModKey) { soloModKey = null; return; }
     if (Date.now() - soloModTime > 1000) { soloModKey = null; return; }
     soloModKey = null;
-    for (const name of ['hide', 'arrow', 'hidden', 'auto', 'delay', 'opponent', 'eval']) {
+    for (const name of ['hide', 'arrow', 'hidden', 'auto', 'delay', 'opponent', 'eval', 'voice', 'voiceRepeat', 'analyze']) {
       if (matchModOnly(e, binds[name])) { e.preventDefault(); fireModBind(name); return; }
     }
   });
@@ -2099,13 +2292,17 @@
   if (saved) {
     if (saved.toggles) {
       Object.assign(window.chessHelper, saved.toggles);
-      const tmap = { showArrow: '#ch-arrow', hiddenArrow: '#ch-hidden', autoPlay: '#ch-auto', showOpponent: '#ch-opponent', showEval: '#ch-eval' };
+      const tmap = { showArrow: '#ch-arrow', hiddenArrow: '#ch-hidden', autoPlay: '#ch-auto', showOpponent: '#ch-opponent', showEval: '#ch-eval', voice: '#ch-voice' };
       for (const [k, sel] of Object.entries(tmap)) {
         const cb = panel.querySelector(sel);
         if (cb) cb.checked = !!saved.toggles[k];
       }
       if (saved.toggles.showEval) evalBar.style.display = '';
+      if (saved.toggles.voice) { const vs = panel.querySelector('#ch-voice-sliders'); if (vs) vs.style.display = ''; }
     }
+    if (typeof saved.voiceRate === 'number') { VOICE_RATE = saved.voiceRate; voiceRateSlider.value = VOICE_RATE; voiceRateVal.textContent = VOICE_RATE.toFixed(1); }
+    if (typeof saved.voiceVolume === 'number') { VOICE_VOLUME = saved.voiceVolume; voiceVolSlider.value = VOICE_VOLUME; voiceVolVal.textContent = Math.round(VOICE_VOLUME * 100) + '%'; }
+    if (typeof saved.voiceName === 'string') { VOICE_NAME = saved.voiceName; setVoiceLabel(VOICE_NAME); if (window.speechSynthesis) populateVoicePicker(); }
     if (typeof saved.depth === 'number') {
       ENGINE_DEPTH = saved.depth;
       const ds = panel.querySelector('#ch-depth'); if (ds) ds.value = ENGINE_DEPTH;
