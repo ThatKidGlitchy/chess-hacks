@@ -2,7 +2,7 @@
 
 Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 
-**Current version: v1.3.1**
+**Current version: v1.3.5**
 
 ![Chess Assist — Gameplay](.github/screenshot-gameplay.png)
 
@@ -21,6 +21,7 @@ Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 - **Hidden arrows** — subtle square shading instead of visible arrows for a less obvious look
 - **Opponent's best move** — red arrow predicting the opponent's best reply
 - **Win percent eval bar** — live vertical bar showing win probability from Stockfish evaluation
+- **Voice narration** — speaks the best move each turn through your headphones in chess-SAN style ("knight G one to F three", "bishop takes queen on F seven", "castle kingside", "pawn E seven to E eight, promote to queen, checkmate"). Nothing shows on screen, so anyone watching your screen can't spot it. Dark voice picker, speed / volume sliders, Say-once button to replay the last move, and a dedicated keybind on desktop
 - **Cheat detection** — real-time CPL, accuracy %, best move rate, and suspicion gauge
 - **Opponent / You toggle** — track the opponent's accuracy or your own with full move history
 - **Re-analyze game** — replay all moves through the engine to recalculate stats
@@ -93,7 +94,7 @@ Always runs the latest version from GitHub:
 
 ## Mobile / iOS Safari (chess-assist-mobile.js)
 
-Same features as desktop (including skins, live win percent eval bar and engine detection) except no keybind system and no hide-all toggle (mobile doesn't use keyboards). Touch-optimized with larger targets (48px bubble, 28px switches, 22px slider thumbs), close button on panel, slightly longer timeouts for slower devices.
+Same features as desktop (skins, live win percent eval bar, engine detection, voice narration) except no keybind system and no hide-all toggle (mobile doesn't use keyboards). Touch-optimized with larger targets (48px bubble, 28px switches, 22px slider thumbs), close button on panel, slightly longer timeouts for slower devices.
 
 ### Usage — Loader Bookmarklet
 
