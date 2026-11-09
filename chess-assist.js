@@ -928,18 +928,18 @@
         });
         const code = (new TextDecoder).decode(buf);
         showLoadingOverlay(null, 100);
-        const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
+        const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
         sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
           type: 'application/javascript'
         })));
       }
-      sfWorker.onerror = handleWorkerCrash;
       await uciCommand('uci', 'uciok');
       uciSend('setoption name Hash value ' + (engine.hash || 64));
       sfCurrentMultiPV = 1;
       if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
       await uciCommand('isready', 'readyok');
       sfReady = true;
+      sfWorker.onerror = handleWorkerCrash;
       hideLoadingOverlay();
       lastEngineResponse = Date.now();
       installReadyokListener();
@@ -953,17 +953,17 @@
         try {
           const asmBuf = await fetchWithProgress(engine.asmUrl, () => {});
           const code = (new TextDecoder).decode(asmBuf);
-          const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
+          const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
           sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
             type: 'application/javascript'
           })));
-          sfWorker.onerror = handleWorkerCrash;
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
           sfCurrentMultiPV = 1;
           if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
           await uciCommand('isready', 'readyok');
           sfReady = true;
+          sfWorker.onerror = handleWorkerCrash;
           lastEngineResponse = Date.now();
           installReadyokListener();
           hideLoadingOverlay();
