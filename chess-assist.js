@@ -2001,14 +2001,25 @@
             board.querySelectorAll(`.piece.${c},.promotion-piece.${c}`).forEach(el => {
               if (el.dataset.chSkin === savedSkins[c]) return;
               el.style.setProperty('background-image', `url("${savedSkins[c]}")`, 'important');
+              el.style.setProperty('background-repeat', 'no-repeat', 'important');
+              el.style.setProperty('background-position', 'center center', 'important');
+              el.style.setProperty('background-origin', 'content-box', 'important');
+              el.style.setProperty('background-clip', 'content-box', 'important');
+              el.style.setProperty('padding', '0', 'important');
               if (skinMaskMode) {
                 const orig = getOriginalPieceUrl(c);
                 el.style.setProperty('-webkit-mask-image', `url("${orig}")`, 'important');
                 el.style.setProperty('mask-image', `url("${orig}")`, 'important');
                 el.style.setProperty('-webkit-mask-size', 'contain', 'important');
                 el.style.setProperty('mask-size', 'contain', 'important');
+                el.style.setProperty('-webkit-mask-repeat', 'no-repeat', 'important');
+                el.style.setProperty('mask-repeat', 'no-repeat', 'important');
+                el.style.setProperty('-webkit-mask-position', 'center', 'important');
+                el.style.setProperty('mask-position', 'center', 'important');
                 el.style.setProperty('background-size', 'cover', 'important');
               } else {
+                el.style.setProperty('-webkit-mask-image', 'none', 'important');
+                el.style.setProperty('mask-image', 'none', 'important');
                 el.style.setProperty('background-size', 'contain', 'important');
               }
               el.style.setProperty('animation', 'none', 'important');
@@ -2033,9 +2044,9 @@
       const sel = `.piece.${c},.promotion-piece.${c}`;
       if (skinMaskMode) {
         const orig = getOriginalPieceUrl(c);
-        css += `${sel}{-webkit-mask-image:url("${orig}");mask-image:url("${orig}");-webkit-mask-size:contain;mask-size:contain;-webkit-mask-repeat:no-repeat;mask-repeat:no-repeat;-webkit-mask-position:center;mask-position:center;background-image:url("${savedSkins[c]}")!important;background-size:cover!important;background-position:center!important;animation:none!important}\n`;
+        css += `${sel}{-webkit-mask-image:url("${orig}")!important;mask-image:url("${orig}")!important;-webkit-mask-size:contain!important;mask-size:contain!important;-webkit-mask-repeat:no-repeat!important;mask-repeat:no-repeat!important;-webkit-mask-position:center!important;mask-position:center!important;-webkit-mask-origin:content-box!important;mask-origin:content-box!important;background-image:url("${savedSkins[c]}")!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;background-origin:content-box!important;background-clip:content-box!important;padding:0!important;animation:none!important;transform-origin:center center!important}\n`;
       } else {
-        css += `${sel}{background-image:url("${savedSkins[c]}")!important;background-size:contain!important;background-repeat:no-repeat!important;background-position:center!important;animation:none!important}\n`;
+        css += `${sel}{background-image:url("${savedSkins[c]}")!important;background-size:contain!important;background-repeat:no-repeat!important;background-position:center center!important;background-origin:content-box!important;background-clip:content-box!important;padding:0!important;animation:none!important;transform-origin:center center!important}\n`;
       }
     }
     if (savedSkins.board) {
@@ -2253,6 +2264,12 @@
         localStorage.setItem('ch-premade-active', id);
       } catch {}
       activePremadeId = id;
+      if (skinMaskMode) {
+        skinMaskMode = false;
+        try { localStorage.setItem('ch-skin-mask', '0'); } catch {}
+        const mt = panel.querySelector('#ch-skin-mask');
+        if (mt) mt.checked = false;
+      }
       renderSkinTiles();
       applySkins();
       refreshPremadeActive();
