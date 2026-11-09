@@ -99,7 +99,7 @@ Always runs the latest version from GitHub:
 
 ## Mobile / iOS Safari (chess-assist-mobile.js)
 
-Same features as desktop (skins, live win percent eval bar, engine detection, voice narration) except no keybind system and no hide-all toggle (mobile doesn't use keyboards). Touch-optimized with larger targets (48px bubble, 28px switches, 22px slider thumbs), close button on panel, slightly longer timeouts for slower devices.
+Same features as desktop (two-page Gameplay and Skins tabs, 188 premade piece sets, custom skin upload, live win percent eval bar, engine detection, voice narration, UI opacity, hidden-arrows darkness slider, Engine / Appearance / Session settings sections) except no keybind system, no hide-all toggle, and no streamer mode (mobile doesn't use keyboards and phones don't stream). Touch-optimized with larger targets (48px bubble, 28px switches, 22px slider thumbs), close button on panel, slightly longer timeouts for slower devices. Premade catalog falls back to XHR on iOS Safari so iPads with a keyboard load correctly.
 
 ### Usage — Loader Bookmarklet
 

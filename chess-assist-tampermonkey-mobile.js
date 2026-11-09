@@ -13,6 +13,7 @@
 // ==/UserScript==
 
 
+
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
@@ -81,11 +82,27 @@
     .ch-info:hover { border-color:var(--ch-accent); color:var(--ch-accent); }
     .ch-tooltip { display:none; background:rgba(10,10,12,0.95); border:1px solid var(--ch-border); border-radius:10px; padding:8px 12px; font-size:11px; color:rgba(255,255,255,0.7); line-height:1.5; margin-top:4px; }
     .ch-tooltip.show { display:block; }
+    .ch-pager { display:flex; align-items:center; justify-content:center; gap:10px; padding:2px 0 4px; user-select:none; }
+    .ch-pager-arrow { width:26px; height:26px; border-radius:50%; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.6); font-size:13px; line-height:1; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:0; transition:.15s; -webkit-tap-highlight-color:transparent; }
+    .ch-pager-arrow:disabled { opacity:0.25; cursor:default; }
+    .ch-pager-dots { display:flex; gap:5px; }
+    .ch-pager-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.2); cursor:pointer; transition:.15s; }
+    .ch-pager-dot.active { background:var(--ch-accent); width:16px; border-radius:3px; }
+    .ch-pager-count { font-size:11px; font-weight:600; color:rgba(255,255,255,0.5); font-variant-numeric:tabular-nums; min-width:28px; text-align:center; }
+    .ch-gameplay-page, .ch-skins-page { display:none; flex-direction:column; gap:12px; }
+    .ch-gameplay-page.active, .ch-skins-page.active { display:flex; }
+    .ch-premade-tile { position:relative; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 4px 6px; cursor:pointer; transition:.15s; display:flex; flex-direction:column; align-items:center; gap:4px; -webkit-tap-highlight-color:transparent; }
+    .ch-premade-tile.active { background:rgba(129,182,76,0.15); border-color:var(--ch-accent); }
+    .ch-premade-tile img { width:40px; height:40px; pointer-events:none; }
+    .ch-premade-name { font-size:10px; color:rgba(255,255,255,0.7); text-align:center; line-height:1.2; word-break:break-word; }
+    .ch-section-head { font-size:10px; font-weight:700; color:rgba(255,255,255,0.4); letter-spacing:1.5px; text-transform:uppercase; padding:4px 0 2px; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:2px; }
     @keyframes ch-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
   `;
   document.head.appendChild(style);
 
   window.chessHelper = { autoPlay: false, showArrow: false, hiddenArrow: false, showOpponent: false, showEval: false, detection: true, voice: false };
+  let UI_OPACITY = 1;
+  let HIDDEN_DARKNESS = .07;
   let VOICE_RATE = 1.0, VOICE_VOLUME = 1.0, VOICE_NAME = '';
   let voiceUnlocked = false;
   let lastSpokenText = '', lastSpokenFen = '', lastSpokenMove = '';
@@ -106,7 +123,9 @@
         voiceRate: VOICE_RATE, voiceVolume: VOICE_VOLUME, voiceName: VOICE_NAME,
         depth: ENGINE_DEPTH, engineDepths: engineDepths, delayMin: DELAY_MIN, delayMax: DELAY_MAX, delayEnabled: DELAY_ENABLED,
         engine: currentEngine,
-        detTarget: detTarget
+        detTarget: detTarget,
+        uiOpacity: UI_OPACITY,
+        hiddenDarkness: HIDDEN_DARKNESS
       }));
     } catch {}
   }
@@ -736,11 +755,13 @@
     sfCurrentMultiPV = 1;
     _initP = null;
     fenCache.clear();
-    initEngine();
+    lastEngineResponse = Date.now();
+    initEngine().catch(err => console.warn('[Chess Assist] restart failed:', err));
   }
 
   setInterval(() => {
     if (!sfWorker || !sfReady) return;
+    if (!activeSearchHandler && !isWaitingForReady) return;
     const silent = Date.now() - lastEngineResponse;
     if (silent > 15000) {
       console.warn('[Chess Assist] Engine unresponsive for ' + Math.round(silent / 1000) + 's, restarting...');
@@ -1001,7 +1022,7 @@
       const py = flipped ? (rank - 1) * sqSize : (8 - rank) * sqSize;
       const overlay = document.createElement('div');
       overlay.className = 'ch-shade-overlay';
-      overlay.style.cssText = `left:${px}px;top:${py}px;width:${sqSize}px;height:${sqSize}px;background:rgba(0,0,0,0.07);`;
+      overlay.style.cssText = `left:${px}px;top:${py}px;width:${sqSize}px;height:${sqSize}px;background:rgba(0,0,0,${HIDDEN_DARKNESS});`;
       b.appendChild(overlay);
     }
   }
@@ -1280,6 +1301,16 @@
     </div>
     <div class="ch-tab-content active" id="ch-tab-gameplay">
     <div class="ch-thinking" id="ch-thinking">Thinking...</div>
+    <div class="ch-pager" id="ch-gp-pager">
+      <button class="ch-pager-arrow" id="ch-gp-prev" aria-label="Previous page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M5 1L1 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="ch-pager-dots">
+        <div class="ch-pager-dot active" data-page="1"></div>
+        <div class="ch-pager-dot" data-page="2"></div>
+      </div>
+      <span class="ch-pager-count" id="ch-gp-count">1/2</span>
+      <button class="ch-pager-arrow" id="ch-gp-next" aria-label="Next page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="ch-gameplay-page active" data-page="1">
     <div>
       <div class="ch-depth-row">
         <span class="ch-depth-label">Depth</span>
@@ -1303,7 +1334,10 @@
         <span class="ch-info" data-tip="hidden">i</span>
         <label class="ch-switch"><input type="checkbox" id="ch-hidden"><span class="ch-slider"></span></label>
       </div>
-      <div class="ch-tooltip" id="tip-hidden">Instead of a visible arrow, subtly darkens the piece square and target square. Hard to notice unless you know what to look for. Overrides the green arrow when both are on.</div>
+      <div class="ch-tooltip" id="tip-hidden">Darkens the from/to squares instead of drawing an arrow. Use the Darkness slider to pick how strong — lower is subtler, higher is easier to read. Overrides the green arrow when both are on.</div>
+      <div id="ch-hidden-controls" style="display:none">
+        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label" style="font-size:12px;">Darkness</span><input type="range" class="ch-range" id="ch-hidden-darkness" min="2" max="50" value="7"><span class="ch-depth-val" id="ch-hidden-darkness-val" style="font-size:12px;">7%</span></div>
+      </div>
     </div>
     <div>
       <div class="ch-row">
@@ -1322,15 +1356,19 @@
       </div>
     </div>
     <div>
+      <div class="ch-row"><span class="ch-label">Win percent</span><span class="ch-info" data-tip="eval">i</span><label class="ch-switch"><input type="checkbox" id="ch-eval"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-eval">Shows a live win probability bar next to the panel. Updates every position using the selected engine's centipawn evaluation.</div>
+    </div>
+    <button class="ch-btn ch-btn-primary" id="ch-analyze">Analyze once</button>
+    </div>
+    <div class="ch-gameplay-page" data-page="2">
+    <div>
       <div class="ch-row">
         <span class="ch-label">Opponent's best</span>
         <span class="ch-info" data-tip="opponent">i</span>
         <label class="ch-switch"><input type="checkbox" id="ch-opponent"><span class="ch-slider"></span></label>
       </div>
       <div class="ch-tooltip" id="tip-opponent">Shows a red arrow for the opponent's best reply to the current position. Helps you anticipate what they'll play next.</div>
-    </div>
-    <div>
-      <div class="ch-row"><span class="ch-label">Win percent</span><span class="ch-info" data-tip="eval">i</span><label class="ch-switch"><input type="checkbox" id="ch-eval"><span class="ch-slider"></span></label></div>
     </div>
     <div>
       <div class="ch-row"><span class="ch-label">Voice moves</span><span class="ch-info" data-tip="voice">i</span><label class="ch-switch"><input type="checkbox" id="ch-voice"><span class="ch-slider"></span></label></div>
@@ -1347,7 +1385,7 @@
         <button class="ch-btn" id="ch-voice-test" style="margin-top:6px;width:100%;">Say once</button>
       </div>
     </div>
-    <button class="ch-btn ch-btn-primary" id="ch-analyze">Analyze once</button>
+    </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-detection">
       <div style="display:flex;gap:4px;justify-content:center;padding:4px 0 6px;">
@@ -1381,6 +1419,16 @@
       </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-skins">
+    <div class="ch-pager" id="ch-sk-pager">
+      <button class="ch-pager-arrow" id="ch-sk-prev" aria-label="Previous page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M5 1L1 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="ch-pager-dots">
+        <div class="ch-pager-dot active" data-page="1"></div>
+        <div class="ch-pager-dot" data-page="2"></div>
+      </div>
+      <span class="ch-pager-count" id="ch-sk-count">1/2</span>
+      <button class="ch-pager-arrow" id="ch-sk-next" aria-label="Next page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="ch-skins-page active" data-page="1">
       <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;">Tap a tile to upload a custom image</div>
       <div class="ch-skins-grid" id="ch-skins-grid">
         <div class="ch-skins-row-label">White</div>
@@ -1409,7 +1457,18 @@
       </div>
       <button class="ch-detect-reset" id="ch-skins-reset">Reset all skins</button>
     </div>
+    <div class="ch-skins-page" data-page="2">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;">Premade piece sets — tap to apply all 12 pieces at once</div>
+      <input type="text" id="ch-premade-search" placeholder="Search sets…" style="width:100%;padding:8px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;box-sizing:border-box;margin-bottom:6px;">
+      <div id="ch-premade-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:240px;overflow-y:auto;padding-right:2px;-webkit-overflow-scrolling:touch;">
+        <div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;">Loading catalog…</div>
+      </div>
+      <button class="ch-detect-reset" id="ch-premade-clear">Clear premade pieces</button>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;">Sets by Lichess, Rhosgfx, Sharechess. <a href="https://github.com/ThatKidGlitchy/chess-engines/blob/main/skins/CREDITS.txt" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Full credits</a>.</div>
+    </div>
+    </div>
     <div class="ch-tab-content" id="ch-tab-settings">
+      <div class="ch-section-head">Engine</div>
       <div>
         <div class="ch-row"><span class="ch-label">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
         <select id="ch-engine" style="width:100%;padding:8px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:13px;margin-top:4px;color-scheme:dark;">
@@ -1424,9 +1483,15 @@
           <option value="garbochess" style="background:#1a1a1c;color:#fff;">Garbochess</option>
           <option value="p4wn" style="background:#1a1a1c;color:#fff;">p4wn</option>
         </select>
-        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10-18) are lighter and faster on slow devices. Lozza (1/3/11) and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12.</div>
+        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10, 11, 16, 17, 18) are lighter and faster on slow devices. Lozza 11 and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12. p4wn is a deliberately weak pure-JS engine (depth capped at 4) for simulating a low-rated opponent.</div>
       </div>
-      <div style="margin-top:6px">
+      <div class="ch-section-head">Appearance</div>
+      <div>
+        <div class="ch-depth-row"><span class="ch-depth-label" style="font-size:12px;">Opacity</span><span class="ch-info" data-tip="opacity">i</span><input type="range" class="ch-range" id="ch-opacity" min="5" max="100" value="100"><span class="ch-depth-val" id="ch-opacity-val" style="font-size:12px;">100%</span></div>
+        <div class="ch-tooltip" id="tip-opacity">How see-through the whole helper UI is — knight icon, panel, eval bar. 100% is fully opaque. Lower it if the UI gets in the way of the board.</div>
+      </div>
+      <div class="ch-section-head">Session</div>
+      <div>
         <div class="ch-row"><span class="ch-label">Save on reload</span><span class="ch-info" data-tip="persist">i</span><label class="ch-switch"><input type="checkbox" id="ch-persist"><span class="ch-slider"></span></label></div>
         <div class="ch-tooltip" id="tip-persist">When on, your settings (toggles, depth, position) persist across page reloads. Turn off to make changes only for this session.</div>
       </div>
@@ -1443,9 +1508,15 @@
   const CURRENT_VERSION = '1.4.0';
   const CHANGELOG = {
     '1.4.0': [
+      '<b>Premade piece sets</b> — a second page on the Skins tab with 188 open-source piece sets from Lichess, Rhosgfx, and Sharechess. Tap a tile and the whole set applies at once.',
+      '<b>Two-page Gameplay and Skins tabs</b> — pager arrows at the top so the panel stays short while fitting more features.',
+      '<b>UI opacity slider</b> — in the Settings tab. Fade the whole helper UI from 100% down to 5% if it gets in the way of the board.',
+      '<b>Hidden arrows darkness slider</b> — tune how strong the square shading is, from barely visible to easy to spot.',
+      '<b>Settings tab reorganized</b> into Engine / Appearance / Session sections so things aren\'t squeezed together.',
       '<b>Engine list cleaned up</b> — Lozza 1 and Lozza 3 removed; p4wn added as a deliberately weak opponent for low-ELO practice.',
-      '<b>Bug fixes and polish</b>.',
-      '<b>Note</b>: desktop picked up bigger features this release (Streamer mode, premade piece sets, two-page tabs, UI opacity slider, hidden-arrows darkness slider). Some of those are coming to mobile in a later update.'
+      '<b>p4wn fixed</b> — the worker-crash loop that killed p4wn is gone. The watchdog now only restarts the engine when a search is actually stuck.',
+      '<b>iOS Safari catalog fallback</b> — the premade catalog now falls back to XHR when iOS Safari\'s fetch chokes, so iPads with a keyboard work too.',
+      '<b>Bug fixes and polish</b>.'
     ]
   };
   function showWhatsNew(force) {
@@ -1488,6 +1559,23 @@
       if (target) target.classList.add('active');
     };
   });
+  let gameplayPage = 1;
+  const gameplayPageCount = panel.querySelectorAll('.ch-gameplay-page').length;
+  function setGameplayPage(n) {
+    gameplayPage = Math.max(1, Math.min(gameplayPageCount, n));
+    panel.querySelectorAll('.ch-gameplay-page').forEach(p => p.classList.toggle('active', +p.dataset.page === gameplayPage));
+    panel.querySelectorAll('#ch-gp-pager .ch-pager-dot').forEach(d => d.classList.toggle('active', +d.dataset.page === gameplayPage));
+    const prev = panel.querySelector('#ch-gp-prev');
+    const next = panel.querySelector('#ch-gp-next');
+    if (prev) prev.disabled = gameplayPage === 1;
+    if (next) next.disabled = gameplayPage === gameplayPageCount;
+    const count = panel.querySelector('#ch-gp-count');
+    if (count) count.textContent = gameplayPage + '/' + gameplayPageCount;
+  }
+  panel.querySelector('#ch-gp-prev').onclick = () => setGameplayPage(gameplayPage - 1);
+  panel.querySelector('#ch-gp-next').onclick = () => setGameplayPage(gameplayPage + 1);
+  panel.querySelectorAll('#ch-gp-pager .ch-pager-dot').forEach(dot => { dot.onclick = () => setGameplayPage(+dot.dataset.page); });
+  setGameplayPage(1);
   panel.querySelector('#ch-det-reset').onclick = resetDetection;
   panel.querySelector('#ch-det-black').onclick = () => {
     if (detTarget === 'b') return;
@@ -1660,10 +1748,149 @@
     skinInput.value = '';
   };
 
-  panel.querySelector('#ch-skins-reset').onclick = () => { savedSkins = {}; try { localStorage.setItem('ch-skins', '{}'); } catch {} renderSkinTiles(); applySkins(); };
+  panel.querySelector('#ch-skins-reset').onclick = () => { savedSkins = {}; try { localStorage.setItem('ch-skins', '{}'); } catch {} try { localStorage.removeItem('ch-premade-active'); } catch {} activePremadeId = ''; renderSkinTiles(); applySkins(); refreshPremadeActive(); };
   const maskToggle = panel.querySelector('#ch-skin-mask');
   maskToggle.checked = skinMaskMode;
   maskToggle.onchange = () => { skinMaskMode = maskToggle.checked; localStorage.setItem('ch-skin-mask', skinMaskMode ? '1' : '0'); applySkins(); };
+
+  let skinsPage = 1;
+  const skinsPageCount = panel.querySelectorAll('.ch-skins-page').length;
+  function setSkinsPage(n) {
+    skinsPage = Math.max(1, Math.min(skinsPageCount, n));
+    panel.querySelectorAll('.ch-skins-page').forEach(p => p.classList.toggle('active', +p.dataset.page === skinsPage));
+    panel.querySelectorAll('#ch-sk-pager .ch-pager-dot').forEach(d => d.classList.toggle('active', +d.dataset.page === skinsPage));
+    const prev = panel.querySelector('#ch-sk-prev');
+    const next = panel.querySelector('#ch-sk-next');
+    if (prev) prev.disabled = skinsPage === 1;
+    if (next) next.disabled = skinsPage === skinsPageCount;
+    const count = panel.querySelector('#ch-sk-count');
+    if (count) count.textContent = skinsPage + '/' + skinsPageCount;
+    if (skinsPage === 2 && !premadeCatalog) loadPremadeCatalog();
+  }
+  panel.querySelector('#ch-sk-prev').onclick = () => setSkinsPage(skinsPage - 1);
+  panel.querySelector('#ch-sk-next').onclick = () => setSkinsPage(skinsPage + 1);
+  panel.querySelectorAll('#ch-sk-pager .ch-pager-dot').forEach(d => { d.onclick = () => setSkinsPage(+d.dataset.page); });
+  setSkinsPage(1);
+
+  const PREMADE_BASE = 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main';
+  let premadeCatalog = null, activePremadeId = '';
+  try { activePremadeId = localStorage.getItem('ch-premade-active') || ''; } catch {}
+  function chLoadJSON(url) {
+    return fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).catch(() => new Promise((res, rej) => {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) { try { res(JSON.parse(xhr.responseText)); } catch (e) { rej(e); } } else rej(new Error('HTTP ' + xhr.status)); };
+        xhr.onerror = () => rej(new Error('network error'));
+        xhr.send();
+      } catch (e) { rej(e); }
+    }));
+  }
+  function buildPremadeGrid() {
+    const grid = panel.querySelector('#ch-premade-grid');
+    if (!grid || !premadeCatalog) return;
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    grid.innerHTML = premadeCatalog.map(s => {
+      const active = s.id === activePremadeId ? ' active' : '';
+      const hay = ((s.name || '') + ' ' + (s.id || '') + ' ' + (s.author || '')).toLowerCase();
+      return `<div class="ch-premade-tile${active}" data-id="${esc(s.id)}" data-hay="${esc(hay)}"><img src="${s.thumb}" alt="" loading="lazy"><div class="ch-premade-name">${esc(s.name)}</div></div>`;
+    }).join('');
+    grid.querySelectorAll('.ch-premade-tile').forEach(tile => { tile.onclick = () => applyPremade(tile.dataset.id); });
+  }
+  function filterPremadeGrid(q) {
+    const grid = panel.querySelector('#ch-premade-grid');
+    if (!grid) return;
+    q = q.trim().toLowerCase();
+    let visible = 0;
+    grid.querySelectorAll('.ch-premade-tile').forEach(tile => {
+      const show = !q || tile.dataset.hay.includes(q);
+      tile.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    let empty = grid.querySelector('.ch-premade-empty');
+    if (visible === 0) {
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.className = 'ch-premade-empty';
+        empty.style.cssText = 'grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;';
+        grid.appendChild(empty);
+      }
+      empty.textContent = 'No sets match.';
+      empty.style.display = '';
+    } else if (empty) {
+      empty.style.display = 'none';
+    }
+  }
+  function refreshPremadeActive() {
+    const grid = panel.querySelector('#ch-premade-grid');
+    if (!grid) return;
+    grid.querySelectorAll('.ch-premade-tile').forEach(t => t.classList.toggle('active', t.dataset.id === activePremadeId));
+  }
+  async function loadPremadeCatalog() {
+    try {
+      premadeCatalog = await chLoadJSON(PREMADE_BASE + '/skins/catalog.json');
+      buildPremadeGrid();
+    } catch (e) {
+      const grid = panel.querySelector('#ch-premade-grid');
+      if (grid) grid.innerHTML = '<div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:#e07040;font-size:11px;padding:20px 0;">Failed to load catalog.<br><span style="color:rgba(255,255,255,0.4);">' + String(e.message || e) + '</span></div>';
+    }
+  }
+  async function applyPremade(id) {
+    const entry = (premadeCatalog || []).find(s => s.id === id);
+    if (!entry) return;
+    try {
+      const pieces = await chLoadJSON(PREMADE_BASE + '/' + entry.file);
+      for (const code of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']) {
+        if (pieces[code]) savedSkins[code] = pieces[code];
+      }
+      try { localStorage.setItem('ch-skins', JSON.stringify(savedSkins)); } catch {}
+      try { localStorage.setItem('ch-premade-active', id); } catch {}
+      activePremadeId = id;
+      renderSkinTiles(); applySkins(); refreshPremadeActive();
+    } catch (e) {
+      console.warn('[Chess Assist] Failed to apply premade set:', e);
+    }
+  }
+  const premadeSearch = panel.querySelector('#ch-premade-search');
+  if (premadeSearch) {
+    let searchTimer = null;
+    premadeSearch.oninput = e => { const v = e.target.value; clearTimeout(searchTimer); searchTimer = setTimeout(() => filterPremadeGrid(v), 120); };
+  }
+  panel.querySelector('#ch-premade-clear').onclick = () => {
+    for (const code of ['wk','wq','wr','wb','wn','wp','bk','bq','br','bb','bn','bp']) delete savedSkins[code];
+    try { localStorage.setItem('ch-skins', JSON.stringify(savedSkins)); } catch {}
+    try { localStorage.removeItem('ch-premade-active'); } catch {}
+    activePremadeId = '';
+    renderSkinTiles(); applySkins(); refreshPremadeActive();
+  };
+
+  function applyUIOpacity() { try { root.style.opacity = String(UI_OPACITY); } catch {} }
+  const opacitySlider = panel.querySelector('#ch-opacity');
+  const opacityVal = panel.querySelector('#ch-opacity-val');
+  if (opacitySlider) {
+    opacitySlider.oninput = e => {
+      UI_OPACITY = Math.max(.05, Math.min(1, parseInt(e.target.value, 10) / 100));
+      opacityVal.textContent = Math.round(UI_OPACITY * 100) + '%';
+      applyUIOpacity();
+      saveSettings();
+    };
+  }
+  applyUIOpacity();
+
+  const hiddenControls = panel.querySelector('#ch-hidden-controls');
+  const hiddenDarknessSlider = panel.querySelector('#ch-hidden-darkness');
+  const hiddenDarknessVal = panel.querySelector('#ch-hidden-darkness-val');
+  if (hiddenDarknessSlider) {
+    hiddenDarknessSlider.oninput = e => {
+      HIDDEN_DARKNESS = Math.max(.02, Math.min(.5, parseInt(e.target.value, 10) / 100));
+      hiddenDarknessVal.textContent = Math.round(HIDDEN_DARKNESS * 100) + '%';
+      document.querySelectorAll('.ch-shade-overlay').forEach(ov => { ov.style.background = `rgba(0,0,0,${HIDDEN_DARKNESS})`; });
+      saveSettings();
+    };
+  }
+  function syncHiddenControls() { if (hiddenControls) hiddenControls.style.display = window.chessHelper.hiddenArrow ? '' : 'none'; }
+  syncHiddenControls();
+
   renderSkinTiles(); applySkins();
 
   let bx = window.innerWidth - 64, by = window.innerHeight * 0.4;
@@ -1761,6 +1988,7 @@
   panel.querySelector('#ch-hidden').onchange = (e) => {
     window.chessHelper.hiddenArrow = e.target.checked;
     if (!e.target.checked) clearShading(); else { lastFen = ''; tick(); }
+    syncHiddenControls();
     saveSettings();
   };
   panel.querySelector('#ch-auto').onchange = (e) => {
@@ -1877,6 +2105,16 @@
       }
       if (saved.toggles.showEval) evalBar.style.display = '';
       if (saved.toggles.voice) { const vs = panel.querySelector('#ch-voice-sliders'); if (vs) vs.style.display = ''; }
+      syncHiddenControls();
+    }
+    if (typeof saved.uiOpacity === 'number') {
+      UI_OPACITY = Math.max(.05, Math.min(1, saved.uiOpacity));
+      if (opacitySlider) { opacitySlider.value = Math.round(UI_OPACITY * 100); opacityVal.textContent = Math.round(UI_OPACITY * 100) + '%'; }
+      applyUIOpacity();
+    }
+    if (typeof saved.hiddenDarkness === 'number') {
+      HIDDEN_DARKNESS = Math.max(.02, Math.min(.5, saved.hiddenDarkness));
+      if (hiddenDarknessSlider) { hiddenDarknessSlider.value = Math.round(HIDDEN_DARKNESS * 100); hiddenDarknessVal.textContent = Math.round(HIDDEN_DARKNESS * 100) + '%'; }
     }
     if (typeof saved.voiceRate === 'number') { VOICE_RATE = saved.voiceRate; voiceRateSlider.value = VOICE_RATE; voiceRateVal.textContent = VOICE_RATE.toFixed(1); }
     if (typeof saved.voiceVolume === 'number') { VOICE_VOLUME = saved.voiceVolume; voiceVolSlider.value = VOICE_VOLUME; voiceVolVal.textContent = Math.round(VOICE_VOLUME * 100) + '%'; }
