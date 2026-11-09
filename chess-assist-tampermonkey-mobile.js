@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist (Mobile)
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.4.0
+// @version      1.4.2
 // @description  Chess.com mobile assistant with 14 selectable engines (Stockfish 8-19, Lozza, Garbochess), auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection, custom skins, and per-engine depth memory.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -11,7 +11,7 @@
 // @match        *://*.chess.com/*
 // @grant        none
 // ==/UserScript==
-// Chess Assist (Mobile) v1.4.0 — https://github.com/ThatKidGlitchy/chess-hacks
+// Chess Assist (Mobile) v1.4.2 — https://github.com/ThatKidGlitchy/chess-hacks
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
@@ -105,6 +105,8 @@
   let voiceUnlocked = false;
   let lastSpokenText = '', lastSpokenFen = '', lastSpokenMove = '';
   let persistSettings = localStorage.getItem('ch-persist') !== '0';
+  const DEPTH_ELO_TABLE = [null, 1500, 1700, 1900, 2100, 2300, 2500, 2700, 2850, 2950, 3050, 3100, 3150, 3200, 3250, 3300, 3350, 3400, 3430, 3460, 3490, 3510, 3530, 3550, 3600];
+  function depthToElo(d) { return DEPTH_ELO_TABLE[Math.max(1, Math.min(24, d|0))] || 3200; }
 
   function loadSettings() {
     try {
@@ -750,6 +752,7 @@
     const dv = document.getElementById('ch-depth-val');
     if (ds) { ds.max = cap; if (+ds.value > cap) ds.value = ENGINE_DEPTH; }
     if (dv) dv.textContent = ENGINE_DEPTH;
+    try { if (typeof updateDepthEloLabel === 'function') updateDepthEloLabel(); } catch {}
     if (changed) saveSettings();
   }
 
@@ -1345,7 +1348,8 @@
         <input type="range" class="ch-range" id="ch-depth" min="1" max="24" value="16">
         <span class="ch-depth-val" id="ch-depth-val">16</span>
       </div>
-      <div class="ch-tooltip" id="tip-depth">How many moves ahead the engine calculates. Higher = stronger but slower. 16 is a good balance. Below 10 is fast but weaker, above 20 is very slow.</div>
+      <div class="ch-tooltip" id="tip-depth">How many moves ahead the engine calculates. Higher = stronger but slower. 16 is a good balance. Below 10 is fast but weaker, above 20 is very slow. The &ldquo;&asymp; N ELO&rdquo; label below is a rough estimate of playing strength at that depth &mdash; not official. For Stockfish it&rsquo;s ballparked against CCRL-ish ratings; for Lozza 11, Garbochess, and p4wn it&rsquo;s a looser guess since those engines don&rsquo;t have standardized strength numbers.</div>
+      <div id="ch-depth-elo" style="font-size:10px;color:rgba(255,255,255,0.4);text-align:right;margin-top:2px;letter-spacing:0.3px;">&asymp; 3350 ELO</div>
     </div>
     <div>
       <div class="ch-row">
@@ -1532,8 +1536,12 @@
   wrap.append(panel, evalBar);
   root.append(bubble, wrap); document.body.appendChild(root);
 
-  const CURRENT_VERSION = '1.4.0';
+  const CURRENT_VERSION = '1.4.2';
   const CHANGELOG = {
+    '1.4.2': [
+      '<b>Depth ≈ ELO estimate</b> under the Depth slider so you can see roughly how strong each depth level plays. Rough estimate, not official — looser for Lozza / Garbochess / p4wn.',
+      '<b>Engine loader fixes</b> — Stockfish 10/17 and p4wn no longer sit on the loading animation forever. 60-second fetch and XHR timeouts, SharedArrayBuffer cleanly disabled on iOS Safari, and the overlay reliably hides when the asm.js fallback takes over.'
+    ],
     '1.4.0': [
       '<b>Premade piece sets</b> — a second page on the Skins tab with 188 open-source piece sets from Lichess, Rhosgfx, and Sharechess. Tap a tile and the whole set applies at once.',
       '<b>Two-page Gameplay and Skins tabs</b> — pager arrows at the top so the panel stays short while fitting more features.',
@@ -1996,10 +2004,17 @@
 
   panel.querySelector('#ch-close').onclick = () => wrap.classList.remove('visible');
 
+  function updateDepthEloLabel() {
+    const el = panel.querySelector('#ch-depth-elo');
+    if (!el) return;
+    el.textContent = '≈ ' + depthToElo(ENGINE_DEPTH) + ' ELO';
+  }
+
   panel.querySelector('#ch-depth').oninput = (e) => {
     ENGINE_DEPTH = parseInt(e.target.value);
     engineDepths[currentEngine] = ENGINE_DEPTH;
     panel.querySelector('#ch-depth-val').textContent = ENGINE_DEPTH;
+    updateDepthEloLabel();
     saveSettings();
   };
   const engineSelect = panel.querySelector('#ch-engine');
@@ -2208,6 +2223,7 @@
       panel.querySelector('#ch-det-black').style.color = 'rgba(255,255,255,0.5)';
     }
     applyDepthCap();
+    updateDepthEloLabel();
   }
 
   console.log('chess helper (mobile) loaded');

@@ -2,7 +2,7 @@
 
 Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 
-**Current version: v1.4.0**
+**Current version: v1.4.2**
 
 ![Chess Assist — Gameplay](.github/screenshot-gameplay.png)
 
@@ -33,7 +33,8 @@ Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 - **Custom piece skins** — upload custom images for any piece (both colors)
 - **Board themes** — custom board background image
 - **Tile overlays** — separate images for light and dark squares
-- **Adjustable depth** — engine search depth from 1 to 24 (default 16, auto-caps at 12 for pure-JS engines)
+- **Adjustable depth** — engine search depth from 1 to 24 (default 16, auto-caps at 12 for pure-JS engines). A small "≈ N ELO" subtitle under the slider shows a rough playing-strength estimate at that depth (community ballpark, not official — looser for Lozza / Garbochess / p4wn)
+- **Hide icon persistence** *(desktop)* — hiding the helper now sticks across page reloads. While hidden, auto-play / arrows / voice stay paused until you unhide. Forgot your hide keybind? Open the browser console after loading and it prints the current bind
 - **Customizable keybinds** — assign hotkeys to any toggle, with a one-click Reset keybinds button
 - **Save settings toggle** — turn persistence off to make session-only changes; wipes localStorage cleanly when disabled
 - **Tabbed UI** — Gameplay / Detection / Skins / Settings in a draggable panel
@@ -152,4 +153,9 @@ Each engine falls back to ASM.js when its WASM wrapper references features (like
 - Use the loader bookmarklet to always get the latest version automatically
 - Both arrow types can be shown simultaneously (different SVG layers)
 - Thank you "Chess helper (chess.com)" on the Chrome web store for the UI theme!
+
+## Contributors
+
+- [@ThatKidGlitchy](https://github.com/ThatKidGlitchy) — author / maintainer
+- [@progprogprogprog](https://github.com/progprogprogprog) — suggested the depth → ELO estimate and the hide-icon persistence (v1.4.2)
 
