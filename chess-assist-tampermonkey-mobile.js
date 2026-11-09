@@ -12,8 +12,6 @@
 // @grant        none
 // ==/UserScript==
 
-
-
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
@@ -582,24 +580,43 @@
     try { if (_loadingOverlay) _loadingOverlay.style.display = 'none'; } catch {}
   }
 
+  function xhrArrayBuffer(url, onBytes) {
+    return new Promise((res, rej) => {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open('GET', url, true);
+        xhr.responseType = 'arraybuffer';
+        xhr.onprogress = e => { try { onBytes(e.loaded, e.lengthComputable ? e.total : 0); } catch {} };
+        xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300 && xhr.response) res(xhr.response); else rej(new Error('HTTP ' + xhr.status + ' ' + url)); };
+        xhr.onerror = () => rej(new Error('network error ' + url));
+        xhr.send();
+      } catch (e) { rej(e); }
+    });
+  }
   async function fetchWithProgress(url, onBytes) {
-    const resp = await fetch(url);
-    if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + url);
-    const total = Number(resp.headers.get('Content-Length')) || 0;
-    const reader = resp.body.getReader();
-    const chunks = [];
-    let received = 0;
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      chunks.push(value);
-      received += value.length;
-      try { onBytes(received, total); } catch {}
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + url);
+      if (!resp.body || !resp.body.getReader) return await resp.arrayBuffer();
+      const total = Number(resp.headers.get('Content-Length')) || 0;
+      const reader = resp.body.getReader();
+      const chunks = [];
+      let received = 0;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        try { onBytes(received, total); } catch {}
+      }
+      const buf = new Uint8Array(received);
+      let off = 0;
+      for (const c of chunks) { buf.set(c, off); off += c.length; }
+      return buf.buffer;
+    } catch (e) {
+      console.warn('[Chess Assist] fetch stream failed, falling back to XHR:', e && e.message);
+      return xhrArrayBuffer(url, onBytes);
     }
-    const buf = new Uint8Array(received);
-    let off = 0;
-    for (const c of chunks) { buf.set(c, off); off += c.length; }
-    return buf.buffer;
   }
 
   let _initP = null;
@@ -641,7 +658,8 @@
         });
         const code = new TextDecoder().decode(buf);
         if (_overlay) showLoadingOverlay(null, 100);
-        sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+        const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
+        sfWorker = new Worker(URL.createObjectURL(new Blob([jsPrefix + code], { type: 'application/javascript' })));
       }
       sfWorker.onerror = handleWorkerCrash;
       await uciCommand('uci', 'uciok');
@@ -659,9 +677,10 @@
       sfWorker = null;
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
-          const r = await fetch(engine.asmUrl);
-          const code = await r.text();
-          sfWorker = new Worker(URL.createObjectURL(new Blob([code], { type: 'application/javascript' })));
+          const asmBuf = await fetchWithProgress(engine.asmUrl, () => {});
+          const code = new TextDecoder().decode(asmBuf);
+          const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
+          sfWorker = new Worker(URL.createObjectURL(new Blob([jsPrefix + code], { type: 'application/javascript' })));
           sfWorker.onerror = handleWorkerCrash;
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
