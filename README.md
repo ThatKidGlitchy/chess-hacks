@@ -2,7 +2,7 @@
 
 Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 
-**Current version: v1.3.5**
+**Current version: v1.4.0**
 
 ![Chess Assist — Gameplay](.github/screenshot-gameplay.png)
 
@@ -12,7 +12,12 @@ Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 
 ## Features
 
-- **Multiple engines** — pick from 14 engines at runtime: Stockfish 8, 10, 11, 12, 14, 15, 16, 17, 18, 19, Lozza 1/3/11, and Garbochess
+- **Multiple engines** — 10 engines at runtime: Stockfish 19/18/17/16/11/10/8, Lozza 11, Garbochess, and p4wn
+- **Streamer mode** *(desktop)* — shows the best move as a small floating text pill ("F1 TO C4") instead of an arrow on the board. Drag it anywhere, resize, position it behind your stream overlay or off your OBS capture area
+- **Premade piece sets** *(desktop)* — 188 open-source piece sets from Lichess, Rhosgfx, and Sharechess on a second Skins page. Click to apply all 12 pieces at once
+- **UI opacity slider** *(desktop)* — fade the whole helper UI from 100% down to 5% so it never gets in the way of the board
+- **Hidden arrows darkness slider** *(desktop)* — tune how strong the shaded-square hint is
+- **Two-page Gameplay and Skins tabs** *(desktop)* — pager arrows at the top keep the panel short while fitting more features
 - **Per-engine depth memory** — each engine remembers its own search depth independently
 - **Loading overlay with progress %** — full-screen spinner shows which engine is loading and real-time download percent
 - **Auto-play** — engine plays the best move automatically each turn with anti-repetition to avoid draw loops
@@ -128,9 +133,8 @@ The desktop version (`chess-assist.js`) ships with 14 engines selectable from th
 | Stockfish 10 | WASM | 24 | |
 | Stockfish 8 | asm.js | 24 | Pure asm.js, 64 MB fixed memory |
 | Lozza 11 | Pure JS (NNUE) | 12 | |
-| Lozza 3 | Pure JS | 12 | |
-| Lozza 1 | Pure JS | 12 | Classical |
 | Garbochess | Pure JS | 12 | Gary Linscott's engine with a UCI wrapper |
+| p4wn | Pure JS | 4 | Douglas Bagnall's "5k chess" — deliberately weak, for low-ELO practice |
 
 Each engine falls back to ASM.js when its WASM wrapper references features (like `SharedArrayBuffer`) that fail in a plain Worker. MultiPV up to 3 with anti-repetition logic to avoid draw loops; pure-JS engines run MultiPV 1 only.
 

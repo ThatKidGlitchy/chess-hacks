@@ -1,4 +1,4 @@
-// Chess Assist (Mobile) v1.3.5 — https://github.com/ThatKidGlitchy/chess-hacks
+// Chess Assist (Mobile) v1.4.0 — https://github.com/ThatKidGlitchy/chess-hacks
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
@@ -522,8 +522,7 @@
     'sf10': { label: 'Stockfish 10', kind: 'js', maxDepth: 24, url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.asm.js' },
     'sf8':  { label: 'Stockfish 8', kind: 'js', maxDepth: 24, hash: 8, url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/8/stockfish.js' },
     'lozza11': { label: 'Lozza 11', kind: 'js', maxDepth: 12, url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/11/lozza.js', noMultiPV: true },
-    'lozza3':  { label: 'Lozza 3',  kind: 'js', maxDepth: 12, url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/3/lozza.js', noMultiPV: true },
-    'lozza1':  { label: 'Lozza 1',  kind: 'js', maxDepth: 12, url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/1/lozza.js', noMultiPV: true },
+    'p4wn':    { label: 'p4wn',     kind: 'js', maxDepth: 4,  defaultDepth: 3, url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/p4wn/1/p4wn.js?v=3', noMultiPV: true, noStop: true },
     'garbochess': { label: 'Garbochess', kind: 'js', maxDepth: 12, url: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/garbochess/1/garbochess.js', noMultiPV: true }
   };
   let currentEngine = 'sf19';
@@ -1408,9 +1407,8 @@
           <option value="sf10" style="background:#1a1a1c;color:#fff;">Stockfish 10</option>
           <option value="sf8" style="background:#1a1a1c;color:#fff;">Stockfish 8</option>
           <option value="lozza11" style="background:#1a1a1c;color:#fff;">Lozza 11</option>
-          <option value="lozza3" style="background:#1a1a1c;color:#fff;">Lozza 3</option>
-          <option value="lozza1" style="background:#1a1a1c;color:#fff;">Lozza 1</option>
           <option value="garbochess" style="background:#1a1a1c;color:#fff;">Garbochess</option>
+          <option value="p4wn" style="background:#1a1a1c;color:#fff;">p4wn</option>
         </select>
         <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10-18) are lighter and faster on slow devices. Lozza (1/3/11) and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12.</div>
       </div>
@@ -1427,6 +1425,39 @@
   evalBar.style.display = 'none';
   wrap.append(panel, evalBar);
   root.append(bubble, wrap); document.body.appendChild(root);
+
+  const CURRENT_VERSION = '1.4.0';
+  const CHANGELOG = {
+    '1.4.0': [
+      '<b>Engine list cleaned up</b> — Lozza 1 and Lozza 3 removed; p4wn added as a deliberately weak opponent for low-ELO practice.',
+      '<b>Bug fixes and polish</b>.',
+      '<b>Note</b>: desktop picked up bigger features this release (Streamer mode, premade piece sets, two-page tabs, UI opacity slider, hidden-arrows darkness slider). Some of those are coming to mobile in a later update.'
+    ]
+  };
+  function showWhatsNew(force) {
+    const seenKey = 'ch-whatsnew-seen';
+    const seen = (() => { try { return localStorage.getItem(seenKey); } catch { return null; } })();
+    if (!force && seen === CURRENT_VERSION) return;
+    const items = CHANGELOG[CURRENT_VERSION] || [];
+    if (!items.length) return;
+    const backdrop = document.createElement('div');
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100010;display:flex;align-items:center;justify-content:center;-webkit-backdrop-filter:blur(4px);backdrop-filter:blur(4px);font-family:var(--ch-font);padding:16px;box-sizing:border-box;';
+    backdrop.innerHTML = `
+      <div style="width:min(420px,100%);max-height:80vh;overflow-y:auto;background:rgba(18,18,20,0.98);border:1px solid var(--ch-border);border-radius:16px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.8);color:#fff;">
+        <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;">What's new in v${CURRENT_VERSION}</h2>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:16px;">Chess Assist Mobile — chess.com helper</div>
+        <ul style="list-style:none;padding:0;margin:0 0 18px;display:flex;flex-direction:column;gap:10px;">
+          ${items.map(it => `<li style="font-size:13px;line-height:1.45;color:rgba(255,255,255,0.85);padding-left:18px;position:relative;"><span style="position:absolute;left:4px;top:7px;width:6px;height:6px;border-radius:50%;background:var(--ch-accent);"></span>${it}</li>`).join('')}
+        </ul>
+        <button id="ch-whatsnew-ok" style="width:100%;padding:12px;border-radius:10px;border:none;background:var(--ch-accent);color:#121212;font-family:var(--ch-font);font-size:13px;font-weight:700;cursor:pointer;">Got it</button>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const close = () => { try { localStorage.setItem(seenKey, CURRENT_VERSION); } catch {} backdrop.remove(); };
+    backdrop.querySelector('#ch-whatsnew-ok').onclick = close;
+    backdrop.addEventListener('click', (e) => { if (e.target === backdrop) close(); });
+  }
+  window.chessHelper.showWhatsNew = () => showWhatsNew(true);
+  setTimeout(() => showWhatsNew(false), 400);
 
   const thinkingEl = panel.querySelector('#ch-thinking');
 
