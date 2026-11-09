@@ -833,24 +833,30 @@
       if (_loadingOverlay) _loadingOverlay.style.display = 'none';
     } catch {}
   }
-  function xhrArrayBuffer(url, onBytes) {
+  function xhrArrayBuffer(url, onBytes, timeoutMs) {
     return new Promise((res, rej) => {
       try {
         const xhr = new XMLHttpRequest();
         xhr.open('GET', url, true);
         xhr.responseType = 'arraybuffer';
+        xhr.timeout = timeoutMs || 60000;
         xhr.onprogress = e => { try { onBytes(e.loaded, e.lengthComputable ? e.total : 0); } catch {} };
         xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300 && xhr.response) res(xhr.response); else rej(new Error('HTTP ' + xhr.status + ' ' + url)); };
         xhr.onerror = () => rej(new Error('network error ' + url));
+        xhr.ontimeout = () => rej(new Error('XHR timeout ' + url));
         xhr.send();
       } catch (e) { rej(e); }
     });
   }
   async function fetchWithProgress(url, onBytes) {
+    const TIMEOUT_MS = 60000;
+    let ctrl = null, timer = null;
     try {
-      const resp = await fetch(url);
+      ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      timer = setTimeout(() => { try { ctrl && ctrl.abort(); } catch {} }, TIMEOUT_MS);
+      const resp = await fetch(url, ctrl ? { signal: ctrl.signal } : undefined);
       if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + url);
-      if (!resp.body || !resp.body.getReader) return await resp.arrayBuffer();
+      if (!resp.body || !resp.body.getReader) { const ab = await resp.arrayBuffer(); clearTimeout(timer); return ab; }
       const total = Number(resp.headers.get('Content-Length')) || 0;
       const reader = resp.body.getReader();
       const chunks = [];
@@ -862,13 +868,15 @@
         received += value.length;
         try { onBytes(received, total); } catch {}
       }
+      clearTimeout(timer);
       const buf = new Uint8Array(received);
       let off = 0;
       for (const c of chunks) { buf.set(c, off); off += c.length; }
       return buf.buffer;
     } catch (e) {
+      clearTimeout(timer);
       console.warn('[Chess Assist] fetch stream failed, falling back to XHR:', e && e.message);
-      return xhrArrayBuffer(url, onBytes);
+      return xhrArrayBuffer(url, onBytes, TIMEOUT_MS);
     }
   }
   let _initP = null;
@@ -958,6 +966,7 @@
           sfReady = true;
           lastEngineResponse = Date.now();
           installReadyokListener();
+          hideLoadingOverlay();
           return;
         } catch (e2) {
           console.warn('[Chess Assist] asm fallback failed:', e2);
