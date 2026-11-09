@@ -2151,7 +2151,11 @@
     d.onclick = () => setSkinsPage(+d.dataset.page);
   });
   setSkinsPage(1);
-  const PREMADE_BASE = 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main';
+  const PREMADE_BASES = [
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main',
+    'https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main',
+    'https://raw.githubusercontent.com/ThatKidGlitchy/chess-engines/main'
+  ];
   let premadeCatalog = null, activePremadeId = '';
   try {
     activePremadeId = localStorage.getItem('ch-premade-active') || '';
@@ -2198,20 +2202,36 @@
     if (!grid) return;
     grid.querySelectorAll('.ch-premade-tile').forEach(t => t.classList.toggle('active', t.dataset.id === activePremadeId));
   }
-  function chLoadJSON(url) {
-    return fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }).catch(() => new Promise((res, rej) => {
+  function chFetchText(url) {
+    return fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).catch(() => new Promise((res, rej) => {
       try {
         const xhr = new XMLHttpRequest();
         xhr.open('GET', url, true);
-        xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) { try { res(JSON.parse(xhr.responseText)); } catch (e) { rej(e); } } else rej(new Error('HTTP ' + xhr.status)); };
+        xhr.onload = () => { if (xhr.status >= 200 && xhr.status < 300) res(xhr.responseText); else rej(new Error('HTTP ' + xhr.status)); };
         xhr.onerror = () => rej(new Error('network error'));
         xhr.send();
       } catch (e) { rej(e); }
     }));
   }
+  async function chLoadJSON(path) {
+    let lastErr = null;
+    for (const base of PREMADE_BASES) {
+      const url = base + path;
+      try {
+        const txt = await chFetchText(url);
+        const trimmed = txt.trimStart();
+        if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) throw new Error('non-JSON response (got "' + trimmed.slice(0, 1) + '")');
+        return JSON.parse(txt);
+      } catch (e) {
+        console.warn('[Chess Assist] mirror failed', new URL(url).host, e && e.message);
+        lastErr = e;
+      }
+    }
+    throw lastErr || new Error('all mirrors failed');
+  }
   async function loadPremadeCatalog() {
     try {
-      premadeCatalog = await chLoadJSON(PREMADE_BASE + '/skins/catalog.json');
+      premadeCatalog = await chLoadJSON('/skins/catalog.json');
       buildPremadeGrid();
     } catch (e) {
       const grid = panel.querySelector('#ch-premade-grid');
@@ -2222,7 +2242,7 @@
     const entry = (premadeCatalog || []).find(s => s.id === id);
     if (!entry) return;
     try {
-      const pieces = await chLoadJSON(PREMADE_BASE + '/' + entry.file);
+      const pieces = await chLoadJSON('/' + entry.file);
       for (const code of [ 'wk', 'wq', 'wr', 'wb', 'wn', 'wp', 'bk', 'bq', 'br', 'bb', 'bn', 'bp' ]) {
         if (pieces[code]) savedSkins[code] = pieces[code];
       }
