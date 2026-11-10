@@ -13,6 +13,7 @@ Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 ## Features
 
 - **Multiple engines** — 10 engines at runtime: Stockfish 19/18/17/16/11/10/8, Lozza 11, Garbochess, and p4wn
+- **Interface in 16 languages** *(desktop)* — English, Español, Français, Deutsch, Português, Русский, Italiano, Polski, Nederlands, Türkçe, 简体中文, 日本語, 한국어, Українська, हिन्दी, العربية. First-run language picker; non-English dictionaries fetched on demand from CDN with 24hr localStorage cache so the file stays small. Translated labels that would be wider than the English equivalent scale their font-size down automatically so long words never break the panel layout
 - **Streamer mode** *(desktop)* — shows the best move as a small floating text pill ("F1 TO C4") instead of an arrow on the board. Drag it anywhere, resize, position it behind your stream overlay or off your OBS capture area
 - **Premade piece sets** *(desktop)* — 188 open-source piece sets from Lichess, Rhosgfx, and Sharechess on a second Skins page. Click to apply all 12 pieces at once
 - **UI opacity slider** *(desktop)* — fade the whole helper UI from 100% down to 5% so it never gets in the way of the board

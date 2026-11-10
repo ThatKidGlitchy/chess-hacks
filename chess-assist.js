@@ -39,7 +39,7 @@
     .ch-depth-row { display:flex; align-items:center; gap:10px; }
     .ch-depth-label { font-size:13px; color:#fff; font-weight:500; white-space:nowrap; }
     .ch-depth-val { font-size:13px; color:var(--ch-accent); font-weight:700; min-width:20px; text-align:center; }
-    .ch-range { -webkit-appearance:none; appearance:none; flex:1; height:4px; background:rgba(255,255,255,0.15); border-radius:4px; outline:none; cursor:pointer; }
+    .ch-range { -webkit-appearance:none; appearance:none; flex:1; min-width:0; height:4px; background:rgba(255,255,255,0.15); border-radius:4px; outline:none; cursor:pointer; }
     .ch-range::-webkit-slider-thumb { -webkit-appearance:none; width:16px; height:16px; border-radius:50%; background:var(--ch-accent); cursor:pointer; }
     .ch-range::-moz-range-thumb { width:16px; height:16px; border-radius:50%; background:var(--ch-accent); border:none; cursor:pointer; }
     .ch-shade-overlay { position:absolute; pointer-events:none; z-index:999; border-radius:2px; transition:opacity .2s; }
@@ -285,6 +285,21 @@
     } catch {}
 
     fitTextToEnglish(root);
+    fitLabelsToRow(root);
+  }
+
+  function fitLabelsToRow(root) {
+    root.querySelectorAll('[data-i18n]').forEach(el => {
+      const parent = el.parentElement;
+      if (!parent) return;
+      let tries = 0;
+      while (parent.scrollWidth > parent.clientWidth + 1 && tries < 40) {
+        const cs = parseFloat(getComputedStyle(el).fontSize);
+        if (cs <= 8) break;
+        el.style.fontSize = (cs - 0.5) + 'px';
+        tries++;
+      }
+    });
   }
 
   function fitTextToEnglish(root) {
@@ -672,7 +687,7 @@
       scoreEl.textContent = '—';
       fillEl.style.width = '0%';
       fillEl.style.background = 'var(--ch-accent)';
-      verdictEl.textContent = 'Play a game to start detection';
+      verdictEl.textContent = t('detStart');
       verdictEl.style.color = 'rgba(255,255,255,0.4)';
       return;
     }
@@ -846,6 +861,8 @@
     const commonLength = Math.min(currentMoves.length, savedMoves.length);
     const historyMatches = savedMoves.slice(0, commonLength).every((move, i) => move === currentMoves[i]);
     if (!identity.stable && savedMoves.length && currentMoves.length < savedMoves.length && historyMatches) return false;
+    if (activeDetectionKey && detection.oppMoves > 0 && !gameInProgress()) return false;
+    if (activeDetectionKey && detection.oppMoves > 0 && currentMoves.length === 0 && !saved) return false;
     activeDetectionKey = identity.key;
     moveLog.length = 0;
     positionMoves.clear();
@@ -1922,6 +1939,7 @@
     if (window.chessHelper.detection && Date.now() - _lastSyncDetection > 2e3) {
       _lastSyncDetection = Date.now();
       syncDetectionGame();
+      updateDetectionUI();
     }
     const myTurn = isMyTurn();
     if (myTurn === null) return;
