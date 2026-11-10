@@ -120,6 +120,57 @@
     voice: false,
     streamer: false
   };
+
+
+
+
+  const LANG_INDEX = {
+    en: { _name: "English", langPickerTitle: "Choose your language", langPickerSub: "You can change this later in Settings.", langPickerContinue: "Continue" },
+    es: { _name: "Español", langPickerTitle: "Elige tu idioma", langPickerSub: "Puedes cambiarlo más tarde en Ajustes.", langPickerContinue: "Continuar" },
+    fr: { _name: "Français", langPickerTitle: "Choisissez votre langue", langPickerSub: "Vous pouvez la changer plus tard dans les Réglages.", langPickerContinue: "Continuer" },
+    de: { _name: "Deutsch", langPickerTitle: "Wähle deine Sprache", langPickerSub: "Du kannst sie später in den Einstellungen ändern.", langPickerContinue: "Weiter" },
+    pt: { _name: "Português", langPickerTitle: "Escolha seu idioma", langPickerSub: "Você pode mudar depois em Ajustes.", langPickerContinue: "Continuar" },
+    ru: { _name: "Русский", langPickerTitle: "Выберите язык", langPickerSub: "Можно изменить позже в настройках.", langPickerContinue: "Продолжить" },
+    it: { _name: "Italiano", langPickerTitle: "Scegli la tua lingua", langPickerSub: "Puoi cambiarla più tardi nelle Impostazioni.", langPickerContinue: "Continua" },
+    pl: { _name: "Polski", langPickerTitle: "Wybierz swój język", langPickerSub: "Możesz to zmienić później w Ustawieniach.", langPickerContinue: "Kontynuuj" },
+    nl: { _name: "Nederlands", langPickerTitle: "Kies je taal", langPickerSub: "Je kunt dit later wijzigen in Instellingen.", langPickerContinue: "Doorgaan" },
+    tr: { _name: "Türkçe", langPickerTitle: "Dilini seç", langPickerSub: "Bunu daha sonra Ayarlar'dan değiştirebilirsin.", langPickerContinue: "Devam" },
+    zh: { _name: "简体中文", langPickerTitle: "选择你的语言", langPickerSub: "稍后可在设置中更改。", langPickerContinue: "继续" },
+    ja: { _name: "日本語", langPickerTitle: "言語を選択", langPickerSub: "後で設定から変更できます。", langPickerContinue: "続ける" },
+    ko: { _name: "한국어", langPickerTitle: "언어 선택", langPickerSub: "나중에 설정에서 변경할 수 있습니다.", langPickerContinue: "계속" },
+    uk: { _name: "Українська", langPickerTitle: "Виберіть мову", langPickerSub: "Можна змінити пізніше в налаштуваннях.", langPickerContinue: "Продовжити" },
+    hi: { _name: "हिन्दी", langPickerTitle: "अपनी भाषा चुनें", langPickerSub: "आप इसे बाद में सेटिंग्स में बदल सकते हैं।", langPickerContinue: "जारी रखें" },
+    ar: { _name: "العربية", langPickerTitle: "اختر لغتك", langPickerSub: "يمكنك تغيير ذلك لاحقاً في الإعدادات.", langPickerContinue: "متابعة" }
+  };
+  const LANG_CDN = "https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/i18n/";
+
+  const LANG_CACHE_TTL = 24 * 60 * 60 * 1000;
+  function readCachedLang(code) {
+    try {
+      const raw = localStorage.getItem("ch-lang-cache-" + code);
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (!obj || !obj.data || (Date.now() - obj.t) > LANG_CACHE_TTL) return null;
+      return obj.data;
+    } catch { return null; }
+  }
+  function writeCachedLang(code, data) {
+    try { localStorage.setItem("ch-lang-cache-" + code, JSON.stringify({ t: Date.now(), data })); } catch {}
+  }
+  const _langFetches = {};
+  function loadLang(code) {
+    if (!LANG_INDEX[code] || code === "en") return Promise.resolve(LANGS[code] || null);
+    if (LANGS[code]) return Promise.resolve(LANGS[code]);
+    const cached = readCachedLang(code);
+    if (cached) { LANGS[code] = cached; return Promise.resolve(cached); }
+    if (_langFetches[code]) return _langFetches[code];
+    _langFetches[code] = fetch(LANG_CDN + code + ".json", { cache: "default" })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => { if (data) { LANGS[code] = data; writeCachedLang(code, data); } return data; })
+      .catch(() => null)
+      .finally(() => { delete _langFetches[code]; });
+    return _langFetches[code];
+  }
   let VOICE_RATE = 1, VOICE_VOLUME = 1, VOICE_NAME = '';
   let voiceUnlocked = false;
   let lastSpokenText = '', lastSpokenFen = '', lastSpokenMove = '';
@@ -130,6 +181,140 @@
   let persistSettings = localStorage.getItem('ch-persist') !== '0';
   const DEPTH_ELO_TABLE = [null, 1500, 1700, 1900, 2100, 2300, 2500, 2700, 2850, 2950, 3050, 3100, 3150, 3200, 3250, 3300, 3350, 3400, 3430, 3460, 3490, 3510, 3530, 3550, 3600];
   function depthToElo(d) { return DEPTH_ELO_TABLE[Math.max(1, Math.min(24, d|0))] || 3200; }
+
+
+
+
+
+  const LANGS = {
+    en: {
+      _name: 'English',
+      title: 'Chess Assist',
+      tabGameplay: 'Gameplay', tabDetection: 'Detection', tabSkins: 'Skins', tabSettings: 'Settings',
+      depth: 'Depth', showArrow: 'Show best move', hiddenArrow: 'Hidden arrows', auto: 'Auto-play',
+      delay: 'Move delay', eval: 'Win percent', analyze: 'Analyze once', hide: 'Hide all',
+      opponent: "Opponent's best", voice: 'Voice moves', streamer: 'Streamer mode',
+      darkness: 'Darkness', min: 'Min', max: 'Max', size: 'Size', speed: 'Speed', vol: 'Vol',
+      voiceLabel: 'Voice', sayOnce: 'Say once', center: 'Center on screen',
+      pressKeys: 'Press keys...', thinking: 'Thinking...', loadingEngine: 'Loading engine...',
+      black: 'Black', white: 'White',
+      detMoves: 'Moves analyzed', detAcpl: 'Avg CPL', detBmr: 'Best move rate', detAcc: 'Accuracy', detSusp: 'Suspicion',
+      detStart: 'Play a game to start detection', detReset: 'Reset stats',
+      skinsHint: 'Click a tile to upload a custom image',
+      rowWhite: 'White', rowBlack: 'Black', rowBoard: 'Board', rowTiles: 'Tiles',
+      boardBg: 'Board BG', lightTiles: 'Light tiles', darkTiles: 'Dark tiles',
+      pieceMask: 'Piece mask', resetSkins: 'Reset all skins',
+      premadeHint: 'Premade piece sets — click to apply all 12 pieces at once',
+      searchSets: 'Search sets…', clearPremade: 'Clear premade pieces', loadingCatalog: 'Loading catalog…',
+      setsCredit: 'Sets by Lichess, Rhosgfx, Sharechess.', fullCredits: 'Full credits',
+      engineLabel: 'Engine', appearance: 'Appearance', keybinds: 'Keybinds', session: 'Session', strength: 'Strength',
+      opacity: 'Opacity', resetBinds: 'Reset all keybinds', saveOnReload: 'Save on reload',
+      language: 'Language',
+      madeBy: 'made by', terms: 'Terms & Disclaimer',
+      wnTitle: "What's new in", wnSub: 'Chess Assist — chess.com helper', wnOk: 'Got it',
+      tipDepth: 'How many moves ahead the engine calculates. Higher = stronger but slower. 16 is a good balance. Below 10 is fast but weaker, above 20 is very slow. The “≈ N ELO” label below is a rough estimate of playing strength at that depth — not official. For Stockfish it’s ballparked against CCRL-ish ratings; for Lozza 11, Garbochess, and p4wn it’s a looser guess since those engines don’t have standardized strength numbers.',
+      tipArrow: 'Draws a green arrow on the board showing the best move the engine found.',
+      tipHidden: 'Darkens the from/to squares instead of drawing an arrow. Use the Darkness slider to pick how strong — lower is subtler, higher is easier to read. Overrides the green arrow when both are on.',
+      tipAuto: "Automatically plays the best move for you when it's your turn. Uses anti-repetition to avoid repeating the same moves.",
+      tipDelay: 'Random delay before auto-play makes a move, so it looks like a human thinking. Set a min and max range in seconds. Off by default — the engine moves as soon as it finishes calculating.',
+      tipEval: "Shows a live win probability bar next to the panel. Updates every position using the selected engine's centipawn evaluation.",
+      tipHide: 'Hides everything — the icon, panel, arrows, and shading — and pauses auto-play / arrows / voice until you unhide. The hidden state now persists across page reloads. If you ever forget the keybind, open the browser console (F12) after loading the script and it will print the current hide keybind.',
+      tipOpponent: "Shows a red arrow for the opponent's best reply to the current position. Helps you anticipate what they'll play next.",
+      tipVoice: "Speaks the best move through your headphones each turn. Nothing shows on screen and no arrows need to be drawn — if anyone's watching your screen they can't spot it. Uses your browser's built-in voices; pick voice, speed, and volume below.",
+      tipStreamer: "Shows the best move as a floating text pill instead of an arrow. Drag it off your capture area or behind your stream overlay so viewers can't see it. Resize with the slider.",
+      tipMask: 'Pieces: uses the original piece shape as a mask filled with your custom image. Tiles: each square gets the image individually instead of one large image showing through.',
+      tipEngine: "Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10, 11, 16, 17, 18) are lighter and faster on slow devices. Lozza 11 and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12. p4wn is a deliberately weak pure-JS engine (depth capped at 4) for simulating a low-rated opponent.",
+      tipOpacity: 'How see-through the whole helper UI is — knight icon, panel, eval bar, streamer pill. 100% is fully opaque. Lower it if the UI gets in the way of the board.',
+      tipPersist: 'When on, your settings (toggles, depth, keybinds, position) persist across page reloads. Turn off to make changes only for this session.',
+      tipLang: 'Interface language. Saved separately from other settings, so it stays set even when "Save on reload" is off.',
+      tipDetMoves: 'Number of moves tracked so far. More moves = more reliable stats. At least 10 moves recommended for accurate results.',
+      tipDetAcpl: 'Average Centipawn Loss — how many centipawns the opponent loses per move. Lower = stronger play. Engines typically have ACPL under 10, humans 30–100+ depending on rating.',
+      tipDetBmr: "How often the opponent plays the engine's top choice (within 5 centipawns). Engines hit 80%+, most humans 30–60% depending on ELO.",
+      tipDetAcc: 'Lichess-style accuracy score derived from ACPL. 90%+ is very strong, 95%+ at low ELO is suspicious. Compared against expected accuracy for the opponent’s rating.',
+      tipDetScore: "Multi-factor suspicion score adjusted for the opponent's ELO. Combines ACPL ratio, best-move rate gap, zero-blunder bonus, and accuracy gap vs expected stats for their rating.",
+      langPickerTitle: 'Choose your language', langPickerSub: 'You can change this later in Settings.', langPickerContinue: 'Continue'
+    }
+  };
+  let currentLang = (() => {
+    try {
+      const saved = localStorage.getItem('ch-lang');
+      if (saved && LANG_INDEX[saved]) return saved;
+    } catch {}
+    return null;
+  })();
+  function t(key) {
+    const L = (currentLang && LANGS[currentLang]) || LANGS.en;
+    return L[key] != null ? L[key] : (LANGS.en[key] != null ? LANGS.en[key] : key);
+  }
+  function setLang(lang) {
+    if (!LANG_INDEX[lang]) return;
+    currentLang = lang;
+    try { localStorage.setItem("ch-lang", lang); } catch {}
+    if (lang === "en" || LANGS[lang]) { applyI18n(); return; }
+    loadLang(lang).then(() => applyI18n());
+  }
+  function applyI18n() {
+
+
+    const root = document.getElementById('chess-helper-panel');
+    if (!root) return;
+    root.querySelectorAll('[data-i18n]').forEach(el => {
+      const k = el.getAttribute('data-i18n');
+      el.textContent = t(k);
+    });
+    root.querySelectorAll('[data-i18n-ph]').forEach(el => {
+      el.setAttribute('placeholder', t(el.getAttribute('data-i18n-ph')));
+    });
+
+    const langSel = root.querySelector('#ch-lang');
+    if (langSel) langSel.value = currentLang || 'en';
+
+    try {
+      if (typeof binds === 'object' && typeof keyLabel === 'function') {
+        root.querySelectorAll('.ch-keybind[data-bind]').forEach(el => {
+          const name = el.dataset.bind;
+          if (el.classList.contains('recording')) {
+            el.textContent = t('pressKeys');
+          } else if (binds[name]) {
+            el.textContent = keyLabel(binds[name]);
+          } else {
+            el.textContent = t('pressKeys');
+          }
+        });
+      }
+    } catch {}
+
+    fitTextToEnglish(root);
+  }
+
+  function fitTextToEnglish(root) {
+    if (!root || !LANGS.en) return;
+    const en = LANGS.en;
+    root.querySelectorAll('[data-i18n]').forEach(el => {
+      const k = el.getAttribute('data-i18n');
+      const enStr = en[k];
+      if (!enStr) return;
+      const curStr = el.textContent;
+      if (!el.dataset.chFsBase) {
+        el.dataset.chFsBase = String(parseFloat(getComputedStyle(el).fontSize) || 12);
+      }
+      const base = parseFloat(el.dataset.chFsBase);
+      if (curStr === enStr) { el.style.fontSize = ''; return; }
+      el.style.fontSize = base + 'px';
+      const curW = el.getBoundingClientRect().width;
+      if (curW <= 0) return;
+      el.textContent = enStr;
+      const enW = el.getBoundingClientRect().width;
+      el.textContent = curStr;
+      if (enW > 0 && curW > enW * 1.02) {
+        const ratio = enW / curW;
+        const newSize = Math.max(8, base * ratio);
+        el.style.fontSize = newSize + 'px';
+      } else {
+        el.style.fontSize = '';
+      }
+    });
+  }
   function loadSettings() {
     try {
       const raw = localStorage.getItem('ch-settings');
@@ -1096,7 +1281,7 @@
     }
     engineDepths[currentEngine] = ENGINE_DEPTH;
     currentEngine = newKey;
-    showLoadingOverlay('Loading ' + (ENGINES[newKey].label || newKey) + '...');
+    showLoadingOverlay(t('loadingEngine') + ' — ' + (ENGINES[newKey].label || newKey));
     if (typeof engineDepths[newKey] === 'number') ENGINE_DEPTH = engineDepths[newKey];
     try {
       if (activeSearchHandler && sfWorker) {
@@ -1956,15 +2141,15 @@
   const panel = document.createElement('div');
   panel.id = 'chess-helper-panel';
   panel.innerHTML = `
-    <div class="ch-header"><div class="ch-title">Chess Assist</div><button class="ch-close" id="ch-close">&times;</button></div>
+    <div class="ch-header"><div class="ch-title" data-i18n="title">Chess Assist</div><button class="ch-close" id="ch-close">&times;</button></div>
     <div class="ch-tabs">
-      <button class="ch-tab active" data-tab="gameplay">Gameplay</button>
-      <button class="ch-tab" data-tab="detection">Detection</button>
-      <button class="ch-tab" data-tab="skins">Skins</button>
-      <button class="ch-tab" data-tab="settings">Settings</button>
+      <button class="ch-tab active" data-tab="gameplay" data-i18n="tabGameplay">Gameplay</button>
+      <button class="ch-tab" data-tab="detection" data-i18n="tabDetection">Detection</button>
+      <button class="ch-tab" data-tab="skins" data-i18n="tabSkins">Skins</button>
+      <button class="ch-tab" data-tab="settings" data-i18n="tabSettings">Settings</button>
     </div>
     <div class="ch-tab-content active" id="ch-tab-gameplay">
-    <div class="ch-thinking" id="ch-thinking">Thinking...</div>
+    <div class="ch-thinking" id="ch-thinking" data-i18n="thinking">Thinking...</div>
     <div class="ch-pager" id="ch-gp-pager">
       <button class="ch-pager-arrow" id="ch-gp-prev" data-dir="-1" aria-label="Previous page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M5 1L1 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
       <div class="ch-pager-dots">
@@ -1976,102 +2161,102 @@
     </div>
     <div class="ch-gameplay-page active" data-page="1">
     <div>
-      <div class="ch-depth-row"><span class="ch-depth-label">Depth</span><span class="ch-info" data-tip="depth">i</span><input type="range" class="ch-range" id="ch-depth" min="1" max="24" value="16"><span class="ch-depth-val" id="ch-depth-val">16</span></div>
-      <div class="ch-tooltip" id="tip-depth">How many moves ahead the engine calculates. Higher = stronger but slower. 16 is a good balance. Below 10 is fast but weaker, above 20 is very slow. The “≈ N ELO” label below is a rough estimate of playing strength at that depth — not official. For Stockfish it’s ballparked against CCRL-ish ratings; for Lozza 11, Garbochess, and p4wn it’s a looser guess since those engines don’t have standardized strength numbers.</div>
+      <div class="ch-depth-row"><span class="ch-depth-label" data-i18n="depth">Depth</span><span class="ch-info" data-tip="depth">i</span><input type="range" class="ch-range" id="ch-depth" min="1" max="24" value="16"><span class="ch-depth-val" id="ch-depth-val">16</span></div>
+      <div class="ch-tooltip" id="tip-depth" data-i18n="tipDepth">How many moves ahead the engine calculates. Higher = stronger but slower. 16 is a good balance. Below 10 is fast but weaker, above 20 is very slow. The “≈ N ELO” label below is a rough estimate of playing strength at that depth — not official. For Stockfish it’s ballparked against CCRL-ish ratings; for Lozza 11, Garbochess, and p4wn it’s a looser guess since those engines don’t have standardized strength numbers.</div>
       <div id="ch-depth-elo" style="font-size:10px;color:rgba(255,255,255,0.4);text-align:right;margin-top:2px;letter-spacing:0.3px;">≈ 3350 ELO</div>
     </div>
     <div>
-      <div class="ch-row"><span class="ch-label">Show best move</span><span class="ch-info" data-tip="arrow">i</span><span class="ch-keybind" data-bind="arrow">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-arrow"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-arrow">Draws a green arrow on the board showing the best move the engine found.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="showArrow">Show best move</span><span class="ch-info" data-tip="arrow">i</span><span class="ch-keybind" data-bind="arrow" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-arrow"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-arrow" data-i18n="tipArrow">Draws a green arrow on the board showing the best move the engine found.</div>
     </div>
     <div>
-      <div class="ch-row"><span class="ch-label">Hidden arrows</span><span class="ch-info" data-tip="hidden">i</span><span class="ch-keybind" data-bind="hidden">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-hidden"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-hidden">Darkens the from/to squares instead of drawing an arrow. Use the Darkness slider to pick how strong — lower is subtler, higher is easier to read. Overrides the green arrow when both are on.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="hiddenArrow">Hidden arrows</span><span class="ch-info" data-tip="hidden">i</span><span class="ch-keybind" data-bind="hidden" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-hidden"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-hidden" data-i18n="tipHidden">Darkens the from/to squares instead of drawing an arrow. Use the Darkness slider to pick how strong — lower is subtler, higher is easier to read. Overrides the green arrow when both are on.</div>
       <div id="ch-hidden-controls" style="display:none">
-        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label" style="font-size:12px;">Darkness</span><input type="range" class="ch-range" id="ch-hidden-darkness" min="2" max="50" value="7"><span class="ch-depth-val" id="ch-hidden-darkness-val" style="font-size:12px;">7%</span></div>
+        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label" style="font-size:12px;" data-i18n="darkness">Darkness</span><input type="range" class="ch-range" id="ch-hidden-darkness" min="2" max="50" value="7"><span class="ch-depth-val" id="ch-hidden-darkness-val" style="font-size:12px;">7%</span></div>
       </div>
     </div>
     <div>
-      <div class="ch-row"><span class="ch-label">Auto-play</span><span class="ch-info" data-tip="auto">i</span><span class="ch-keybind" data-bind="auto">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-auto"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-auto">Automatically plays the best move for you when it's your turn. Uses anti-repetition to avoid repeating the same moves.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="auto">Auto-play</span><span class="ch-info" data-tip="auto">i</span><span class="ch-keybind" data-bind="auto" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-auto"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-auto" data-i18n="tipAuto">Automatically plays the best move for you when it's your turn. Uses anti-repetition to avoid repeating the same moves.</div>
     </div>
     <div>
-      <div class="ch-row"><span class="ch-label">Move delay</span><span class="ch-info" data-tip="delay">i</span><span class="ch-keybind" data-bind="delay">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-delay-toggle"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-delay">Random delay before auto-play makes a move, so it looks like a human thinking. Set a min and max range in seconds. Off by default — the engine moves as soon as it finishes calculating.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="delay">Move delay</span><span class="ch-info" data-tip="delay">i</span><span class="ch-keybind" data-bind="delay" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-delay-toggle"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-delay" data-i18n="tipDelay">Random delay before auto-play makes a move, so it looks like a human thinking. Set a min and max range in seconds. Off by default — the engine moves as soon as it finishes calculating.</div>
       <div id="ch-delay-sliders" style="display:none">
-        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label">Min</span><input type="range" class="ch-range" id="ch-delay-min" min="0" max="15" value="1" step="0.5"><span class="ch-depth-val" id="ch-delay-min-val">1s</span></div>
-        <div class="ch-depth-row" style="margin-top:4px"><span class="ch-depth-label">Max</span><input type="range" class="ch-range" id="ch-delay-max" min="0" max="15" value="5" step="0.5"><span class="ch-depth-val" id="ch-delay-max-val">5s</span></div>
+        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label" data-i18n="min">Min</span><input type="range" class="ch-range" id="ch-delay-min" min="0" max="15" value="1" step="0.5"><span class="ch-depth-val" id="ch-delay-min-val">1s</span></div>
+        <div class="ch-depth-row" style="margin-top:4px"><span class="ch-depth-label" data-i18n="max">Max</span><input type="range" class="ch-range" id="ch-delay-max" min="0" max="15" value="5" step="0.5"><span class="ch-depth-val" id="ch-delay-max-val">5s</span></div>
       </div>
     </div>
     <div>
-      <div class="ch-row"><span class="ch-label">Win percent</span><span class="ch-info" data-tip="eval">i</span><span class="ch-keybind" data-bind="eval">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-eval"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-eval">Shows a live win probability bar next to the panel. Updates every position using the selected engine's centipawn evaluation.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="eval">Win percent</span><span class="ch-info" data-tip="eval">i</span><span class="ch-keybind" data-bind="eval" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-eval"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-eval" data-i18n="tipEval">Shows a live win probability bar next to the panel. Updates every position using the selected engine's centipawn evaluation.</div>
     </div>
-    <div class="ch-row" style="margin-top:2px;"><button class="ch-btn ch-btn-primary" id="ch-analyze" style="flex:1;">Analyze once</button><span class="ch-keybind" data-bind="analyze" style="margin-left:8px;">Press keys...</span></div>
+    <div class="ch-row" style="margin-top:2px;"><button class="ch-btn ch-btn-primary" id="ch-analyze" style="flex:1;" data-i18n="analyze">Analyze once</button><span class="ch-keybind" data-bind="analyze" style="margin-left:8px;" data-i18n="pressKeys">Press keys...</span></div>
     <div>
-      <div class="ch-row" style="margin-top:2px"><span class="ch-label" style="flex:0 0 auto;">Hide all</span><span class="ch-info" data-tip="hide">i</span><span class="ch-keybind" data-bind="hide" style="margin-left:auto;">Press keys...</span></div>
-      <div class="ch-tooltip" id="tip-hide">Hides everything — the icon, panel, arrows, and shading — and pauses auto-play / arrows / voice until you unhide. The hidden state now persists across page reloads. If you ever forget the keybind, open the browser console (F12) after loading the script and it will print the current hide keybind.</div>
+      <div class="ch-row" style="margin-top:2px"><span class="ch-label" style="flex:0 0 auto;" data-i18n="hide">Hide all</span><span class="ch-info" data-tip="hide">i</span><span class="ch-keybind" data-bind="hide" style="margin-left:auto;" data-i18n="pressKeys">Press keys...</span></div>
+      <div class="ch-tooltip" id="tip-hide" data-i18n="tipHide">Hides everything — the icon, panel, arrows, and shading — and pauses auto-play / arrows / voice until you unhide. The hidden state now persists across page reloads. If you ever forget the keybind, open the browser console (F12) after loading the script and it will print the current hide keybind.</div>
     </div>
     </div>
     <div class="ch-gameplay-page" data-page="2">
     <div>
-      <div class="ch-row"><span class="ch-label">Opponent's best</span><span class="ch-info" data-tip="opponent">i</span><span class="ch-keybind" data-bind="opponent">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-opponent"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-opponent">Shows a red arrow for the opponent's best reply to the current position. Helps you anticipate what they'll play next.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="opponent">Opponent's best</span><span class="ch-info" data-tip="opponent">i</span><span class="ch-keybind" data-bind="opponent" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-opponent"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-opponent" data-i18n="tipOpponent">Shows a red arrow for the opponent's best reply to the current position. Helps you anticipate what they'll play next.</div>
     </div>
     <div>
-      <div class="ch-row"><span class="ch-label">Voice moves</span><span class="ch-info" data-tip="voice">i</span><span class="ch-keybind" data-bind="voice">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-voice"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-voice">Speaks the best move through your headphones each turn. Nothing shows on screen and no arrows need to be drawn — if anyone's watching your screen they can't spot it. Uses your browser's built-in voices; pick voice, speed, and volume below.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="voice">Voice moves</span><span class="ch-info" data-tip="voice">i</span><span class="ch-keybind" data-bind="voice" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-voice"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-voice" data-i18n="tipVoice">Speaks the best move through your headphones each turn. Nothing shows on screen and no arrows need to be drawn — if anyone's watching your screen they can't spot it. Uses your browser's built-in voices; pick voice, speed, and volume below.</div>
       <div id="ch-voice-sliders" style="display:none">
-        <div style="margin-top:6px;"><div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;">Voice</div>
+        <div style="margin-top:6px;"><div style="font-size:11px;color:rgba(255,255,255,0.5);margin-bottom:4px;" data-i18n="voiceLabel">Voice</div>
           <div id="ch-voice-pick-wrap" style="position:relative;width:100%;">
             <button type="button" id="ch-voice-pick-btn" style="width:100%;padding:7px 24px 7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;text-align:left;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;position:relative;">Default<svg xmlns="http://www.w3.org/2000/svg" width="10" height="6" viewBox="0 0 10 6" style="position:absolute;right:9px;top:50%;transform:translateY(-50%);opacity:0.55;pointer-events:none;"><path d="M1 1l4 4 4-4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
             <div id="ch-voice-pick-list" style="display:none;position:absolute;top:calc(100% + 2px);left:0;right:0;max-height:240px;overflow-y:auto;background:#1a1a1c;border:1px solid rgba(255,255,255,0.1);border-radius:8px;z-index:100002;box-shadow:0 10px 30px rgba(0,0,0,0.6);scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;"></div>
           </div>
         </div>
-        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label">Speed</span><input type="range" class="ch-range" id="ch-voice-rate" min="0.5" max="2" value="1" step="0.1"><span class="ch-depth-val" id="ch-voice-rate-val">1.0</span></div>
-        <div class="ch-depth-row" style="margin-top:4px"><span class="ch-depth-label">Vol</span><input type="range" class="ch-range" id="ch-voice-vol" min="0" max="1" value="1" step="0.05"><span class="ch-depth-val" id="ch-voice-vol-val">100%</span></div>
-        <div class="ch-row" style="margin-top:6px;"><button class="ch-btn" id="ch-voice-test" style="flex:1;">Say once</button><span class="ch-keybind" data-bind="voiceRepeat" style="margin-left:8px;">Press keys...</span></div>
+        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label" data-i18n="speed">Speed</span><input type="range" class="ch-range" id="ch-voice-rate" min="0.5" max="2" value="1" step="0.1"><span class="ch-depth-val" id="ch-voice-rate-val">1.0</span></div>
+        <div class="ch-depth-row" style="margin-top:4px"><span class="ch-depth-label" data-i18n="vol">Vol</span><input type="range" class="ch-range" id="ch-voice-vol" min="0" max="1" value="1" step="0.05"><span class="ch-depth-val" id="ch-voice-vol-val">100%</span></div>
+        <div class="ch-row" style="margin-top:6px;"><button class="ch-btn" id="ch-voice-test" style="flex:1;" data-i18n="sayOnce">Say once</button><span class="ch-keybind" data-bind="voiceRepeat" style="margin-left:8px;" data-i18n="pressKeys">Press keys...</span></div>
       </div>
     </div>
     <div>
-      <div class="ch-row"><span class="ch-label">Streamer mode</span><span class="ch-info" data-tip="streamer">i</span><span class="ch-keybind" data-bind="streamer">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-streamer"><span class="ch-slider"></span></label></div>
-      <div class="ch-tooltip" id="tip-streamer">Shows the best move as a floating text pill instead of an arrow. Drag it off your capture area or behind your stream overlay so viewers can't see it. Resize with the slider.</div>
+      <div class="ch-row"><span class="ch-label" data-i18n="streamer">Streamer mode</span><span class="ch-info" data-tip="streamer">i</span><span class="ch-keybind" data-bind="streamer" data-i18n="pressKeys">Press keys...</span><label class="ch-switch"><input type="checkbox" id="ch-streamer"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-streamer" data-i18n="tipStreamer">Shows the best move as a floating text pill instead of an arrow. Drag it off your capture area or behind your stream overlay so viewers can't see it. Resize with the slider.</div>
       <div id="ch-streamer-controls" style="display:none">
-        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label">Size</span><input type="range" class="ch-range" id="ch-streamer-size" min="12" max="60" value="22"><span class="ch-depth-val" id="ch-streamer-size-val">22</span></div>
-        <div class="ch-row" style="margin-top:6px;"><button class="ch-btn" id="ch-streamer-reset" style="flex:1;">Center on screen</button><span class="ch-keybind" data-bind="streamerCenter" style="margin-left:8px;">Press keys...</span></div>
+        <div class="ch-depth-row" style="margin-top:6px"><span class="ch-depth-label" data-i18n="size">Size</span><input type="range" class="ch-range" id="ch-streamer-size" min="12" max="60" value="22"><span class="ch-depth-val" id="ch-streamer-size-val">22</span></div>
+        <div class="ch-row" style="margin-top:6px;"><button class="ch-btn" id="ch-streamer-reset" style="flex:1;" data-i18n="center">Center on screen</button><span class="ch-keybind" data-bind="streamerCenter" style="margin-left:8px;" data-i18n="pressKeys">Press keys...</span></div>
       </div>
     </div>
     </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-detection">
       <div style="display:flex;gap:4px;justify-content:center;padding:4px 0 6px;">
-        <button id="ch-det-black" class="ch-det-target active" style="flex:1;padding:4px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--ch-accent);color:#fff;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;">Black</button>
-        <button id="ch-det-white" class="ch-det-target" style="flex:1;padding:4px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;">White</button>
+        <button id="ch-det-black" class="ch-det-target active" style="flex:1;padding:4px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--ch-accent);color:#fff;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;" data-i18n="black">Black</button>
+        <button id="ch-det-white" class="ch-det-target" style="flex:1;padding:4px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;" data-i18n="white">White</button>
       </div>
       <div>
-        <div class="ch-detect-stat"><span class="ch-detect-label">Moves analyzed <span class="ch-info" data-tip="det-moves">i</span></span><span class="ch-detect-value" id="ch-det-moves">0</span></div>
-        <div class="ch-tooltip" id="tip-det-moves">Number of moves tracked so far. More moves = more reliable stats. At least 10 moves recommended for accurate results.</div>
+        <div class="ch-detect-stat"><span class="ch-detect-label"><span data-i18n="detMoves">Moves analyzed</span> <span class="ch-info" data-tip="det-moves">i</span></span><span class="ch-detect-value" id="ch-det-moves">0</span></div>
+        <div class="ch-tooltip" id="tip-det-moves" data-i18n="tipDetMoves">Number of moves tracked so far. More moves = more reliable stats. At least 10 moves recommended for accurate results.</div>
       </div>
       <div>
-        <div class="ch-detect-stat"><span class="ch-detect-label">Avg CPL <span class="ch-info" data-tip="det-acpl">i</span></span><span class="ch-detect-value" id="ch-det-acpl">&mdash;</span></div>
-        <div class="ch-tooltip" id="tip-det-acpl">Average Centipawn Loss — how many centipawns the opponent loses per move. Lower = stronger play. Engines typically have ACPL under 10, humans 30–100+ depending on rating.</div>
+        <div class="ch-detect-stat"><span class="ch-detect-label"><span data-i18n="detAcpl">Avg CPL</span> <span class="ch-info" data-tip="det-acpl">i</span></span><span class="ch-detect-value" id="ch-det-acpl">&mdash;</span></div>
+        <div class="ch-tooltip" id="tip-det-acpl" data-i18n="tipDetAcpl">Average Centipawn Loss — how many centipawns the opponent loses per move. Lower = stronger play. Engines typically have ACPL under 10, humans 30–100+ depending on rating.</div>
       </div>
       <div>
-        <div class="ch-detect-stat"><span class="ch-detect-label">Best move rate <span class="ch-info" data-tip="det-bmr">i</span></span><span class="ch-detect-value" id="ch-det-bmr">&mdash;</span></div>
-        <div class="ch-tooltip" id="tip-det-bmr">How often the opponent plays the engine's top choice (within 5 centipawns). Engines hit 80%+, most humans 30–60% depending on ELO.</div>
+        <div class="ch-detect-stat"><span class="ch-detect-label"><span data-i18n="detBmr">Best move rate</span> <span class="ch-info" data-tip="det-bmr">i</span></span><span class="ch-detect-value" id="ch-det-bmr">&mdash;</span></div>
+        <div class="ch-tooltip" id="tip-det-bmr" data-i18n="tipDetBmr">How often the opponent plays the engine's top choice (within 5 centipawns). Engines hit 80%+, most humans 30–60% depending on ELO.</div>
       </div>
       <div>
-        <div class="ch-detect-stat"><span class="ch-detect-label">Accuracy <span class="ch-info" data-tip="det-acc">i</span></span><span class="ch-detect-value" id="ch-det-acc">&mdash;</span></div>
-        <div class="ch-tooltip" id="tip-det-acc">Lichess-style accuracy score derived from ACPL. 90%+ is very strong, 95%+ at low ELO is suspicious. Compared against expected accuracy for the opponent's rating.</div>
+        <div class="ch-detect-stat"><span class="ch-detect-label"><span data-i18n="detAcc">Accuracy</span> <span class="ch-info" data-tip="det-acc">i</span></span><span class="ch-detect-value" id="ch-det-acc">&mdash;</span></div>
+        <div class="ch-tooltip" id="tip-det-acc" data-i18n="tipDetAcc">Lichess-style accuracy score derived from ACPL. 90%+ is very strong, 95%+ at low ELO is suspicious. Compared against expected accuracy for the opponent's rating.</div>
       </div>
       <div>
-        <div class="ch-detect-stat"><span class="ch-detect-label">Suspicion <span class="ch-info" data-tip="det-score">i</span></span><span class="ch-detect-value" id="ch-det-score">&mdash;</span></div>
-        <div class="ch-tooltip" id="tip-det-score">Multi-factor suspicion score adjusted for the opponent's ELO. Combines ACPL ratio, best-move rate gap, zero-blunder bonus, and accuracy gap vs expected stats for their rating.</div>
+        <div class="ch-detect-stat"><span class="ch-detect-label"><span data-i18n="detSusp">Suspicion</span> <span class="ch-info" data-tip="det-score">i</span></span><span class="ch-detect-value" id="ch-det-score">&mdash;</span></div>
+        <div class="ch-tooltip" id="tip-det-score" data-i18n="tipDetScore">Multi-factor suspicion score adjusted for the opponent's ELO. Combines ACPL ratio, best-move rate gap, zero-blunder bonus, and accuracy gap vs expected stats for their rating.</div>
       </div>
       <div class="ch-detect-gauge"><div class="ch-detect-fill" id="ch-det-fill"></div></div>
-      <div class="ch-detect-verdict" id="ch-det-verdict">Play a game to start detection</div>
+      <div class="ch-detect-verdict" id="ch-det-verdict" data-i18n="detStart">Play a game to start detection</div>
       <div style="display:flex;gap:6px;margin-top:4px;">
-        <button class="ch-detect-reset" id="ch-det-reset" style="flex:1;">Reset stats</button>
+        <button class="ch-detect-reset" id="ch-det-reset" style="flex:1;" data-i18n="detReset">Reset stats</button>
       </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-skins">
@@ -2085,48 +2270,48 @@
       <button class="ch-pager-arrow" id="ch-sk-next" data-dir="1" aria-label="Next page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="ch-skins-page active" data-page="1">
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;">Click a tile to upload a custom image</div>
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;" data-i18n="skinsHint">Click a tile to upload a custom image</div>
       <div class="ch-skins-grid" id="ch-skins-grid">
-        <div class="ch-skins-row-label">White</div>
+        <div class="ch-skins-row-label" data-i18n="rowWhite">White</div>
         <div class="ch-skin-tile" data-skin="wk"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wk.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="wq"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wq.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="wr"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wr.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="wb"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wb.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="wn"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wn.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="wp"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wp.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
-        <div class="ch-skins-row-label">Black</div>
+        <div class="ch-skins-row-label" data-i18n="rowBlack">Black</div>
         <div class="ch-skin-tile" data-skin="bk"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/bk.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="bq"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/bq.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="br"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/br.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="bb"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/bb.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="bn"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/bn.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
         <div class="ch-skin-tile" data-skin="bp"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/bp.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
-        <div class="ch-skins-row-label">Board</div>
-        <div class="ch-skin-tile" data-skin="board" style="grid-column:2/6;aspect-ratio:4/1;"><span class="ch-skin-label" style="font-size:11px;">Board BG</span><button class="ch-skin-remove">&times;</button></div>
-        <div class="ch-skins-row-label">Tiles</div>
-        <div class="ch-skin-tile wide" data-skin="lightTiles"><span class="ch-skin-label" style="font-size:11px;">Light tiles</span><button class="ch-skin-remove">&times;</button></div>
-        <div class="ch-skin-tile wide" data-skin="darkTiles"><span class="ch-skin-label" style="font-size:11px;">Dark tiles</span><button class="ch-skin-remove">&times;</button></div>
+        <div class="ch-skins-row-label" data-i18n="rowBoard">Board</div>
+        <div class="ch-skin-tile" data-skin="board" style="grid-column:2/6;aspect-ratio:4/1;"><span class="ch-skin-label" style="font-size:11px;" data-i18n="boardBg">Board BG</span><button class="ch-skin-remove">&times;</button></div>
+        <div class="ch-skins-row-label" data-i18n="rowTiles">Tiles</div>
+        <div class="ch-skin-tile wide" data-skin="lightTiles"><span class="ch-skin-label" style="font-size:11px;" data-i18n="lightTiles">Light tiles</span><button class="ch-skin-remove">&times;</button></div>
+        <div class="ch-skin-tile wide" data-skin="darkTiles"><span class="ch-skin-label" style="font-size:11px;" data-i18n="darkTiles">Dark tiles</span><button class="ch-skin-remove">&times;</button></div>
       </div>
       <div>
-        <div class="ch-row"><span class="ch-label">Piece mask</span><span class="ch-info" data-tip="mask">i</span><label class="ch-switch"><input type="checkbox" id="ch-skin-mask"><span class="ch-slider"></span></label></div>
-        <div class="ch-tooltip" id="tip-mask">Pieces: uses the original piece shape as a mask filled with your custom image. Tiles: each square gets the image individually instead of one large image showing through.</div>
+        <div class="ch-row"><span class="ch-label" data-i18n="pieceMask">Piece mask</span><span class="ch-info" data-tip="mask">i</span><label class="ch-switch"><input type="checkbox" id="ch-skin-mask"><span class="ch-slider"></span></label></div>
+        <div class="ch-tooltip" id="tip-mask" data-i18n="tipMask">Pieces: uses the original piece shape as a mask filled with your custom image. Tiles: each square gets the image individually instead of one large image showing through.</div>
       </div>
-      <button class="ch-detect-reset" id="ch-skins-reset">Reset all skins</button>
+      <button class="ch-detect-reset" id="ch-skins-reset" data-i18n="resetSkins">Reset all skins</button>
     </div>
     <div class="ch-skins-page" data-page="2">
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;">Premade piece sets — click to apply all 12 pieces at once</div>
-      <input type="text" id="ch-premade-search" placeholder="Search sets…" style="width:100%;padding:7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;box-sizing:border-box;margin-bottom:6px;">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;" data-i18n="premadeHint">Premade piece sets — click to apply all 12 pieces at once</div>
+      <input type="text" id="ch-premade-search" placeholder="Search sets…" data-i18n-ph="searchSets" style="width:100%;padding:7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;box-sizing:border-box;margin-bottom:6px;">
       <div id="ch-premade-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:240px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;padding-right:2px;">
-        <div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;">Loading catalog…</div>
+        <div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;" data-i18n="loadingCatalog">Loading catalog…</div>
       </div>
-      <button class="ch-detect-reset" id="ch-premade-clear">Clear premade pieces</button>
-      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;">Sets by Lichess, Rhosgfx, Sharechess. <a href="https://github.com/ThatKidGlitchy/chess-engines/blob/main/skins/CREDITS.txt" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Full credits</a>.</div>
+      <button class="ch-detect-reset" id="ch-premade-clear" data-i18n="clearPremade">Clear premade pieces</button>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;"><span data-i18n="setsCredit">Sets by Lichess, Rhosgfx, Sharechess.</span> <a href="https://github.com/ThatKidGlitchy/chess-engines/blob/main/skins/CREDITS.txt" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="fullCredits">Full credits</a>.</div>
     </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-settings">
-      <div class="ch-section-head">Engine</div>
+      <div class="ch-section-head" data-i18n="engineLabel">Engine</div>
       <div>
-        <div class="ch-row"><span class="ch-label">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
+        <div class="ch-row"><span class="ch-label" data-i18n="engineLabel">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
         <select id="ch-engine" style="width:100%;padding:6px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;color-scheme:dark;">
           <option value="sf19" style="background:#1a1a1c;color:#fff;">Stockfish 19</option>
           <option value="sf18" style="background:#1a1a1c;color:#fff;">Stockfish 18</option>
@@ -2139,24 +2324,29 @@
           <option value="garbochess" style="background:#1a1a1c;color:#fff;">Garbochess</option>
           <option value="p4wn" style="background:#1a1a1c;color:#fff;">p4wn</option>
         </select>
-        <div class="ch-tooltip" id="tip-engine">Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10, 11, 16, 17, 18) are lighter and faster on slow devices. Lozza 11 and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12. p4wn is a deliberately weak pure-JS engine (depth capped at 4) for simulating a low-rated opponent.</div>
+        <div class="ch-tooltip" id="tip-engine" data-i18n="tipEngine">Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10, 11, 16, 17, 18) are lighter and faster on slow devices. Lozza 11 and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12. p4wn is a deliberately weak pure-JS engine (depth capped at 4) for simulating a low-rated opponent.</div>
       </div>
-      <div class="ch-section-head">Appearance</div>
+      <div class="ch-section-head" data-i18n="appearance">Appearance</div>
       <div>
-        <div class="ch-depth-row"><span class="ch-depth-label" style="font-size:12px;">Opacity</span><span class="ch-info" data-tip="opacity">i</span><input type="range" class="ch-range" id="ch-opacity" min="5" max="100" value="100"><span class="ch-depth-val" id="ch-opacity-val" style="font-size:12px;">100%</span></div>
-        <div class="ch-tooltip" id="tip-opacity">How see-through the whole helper UI is — knight icon, panel, eval bar, streamer pill. 100% is fully opaque. Lower it if the UI gets in the way of the board.</div>
+        <div class="ch-depth-row"><span class="ch-depth-label" style="font-size:12px;" data-i18n="opacity">Opacity</span><span class="ch-info" data-tip="opacity">i</span><input type="range" class="ch-range" id="ch-opacity" min="5" max="100" value="100"><span class="ch-depth-val" id="ch-opacity-val" style="font-size:12px;">100%</span></div>
+        <div class="ch-tooltip" id="tip-opacity" data-i18n="tipOpacity">How see-through the whole helper UI is — knight icon, panel, eval bar, streamer pill. 100% is fully opaque. Lower it if the UI gets in the way of the board.</div>
       </div>
-      <div class="ch-section-head">Keybinds</div>
       <div>
-        <button class="ch-btn" id="ch-reset-binds" style="width:100%;padding:8px 0;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-family:var(--ch-font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;">Reset all keybinds</button>
+        <div class="ch-row" style="margin-top:6px;"><span class="ch-label" data-i18n="language">Language</span><span class="ch-info" data-tip="lang">i</span></div>
+        <select id="ch-lang" style="width:100%;padding:6px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;color-scheme:dark;"></select>
+        <div class="ch-tooltip" id="tip-lang" data-i18n="tipLang">Interface language. Saved separately from other settings, so it stays set even when "Save on reload" is off.</div>
       </div>
-      <div class="ch-section-head">Session</div>
+      <div class="ch-section-head" data-i18n="keybinds">Keybinds</div>
       <div>
-        <div class="ch-row"><span class="ch-label">Save on reload</span><span class="ch-info" data-tip="persist">i</span><label class="ch-switch"><input type="checkbox" id="ch-persist"><span class="ch-slider"></span></label></div>
-        <div class="ch-tooltip" id="tip-persist">When on, your settings (toggles, depth, keybinds, position) persist across page reloads. Turn off to make changes only for this session.</div>
+        <button class="ch-btn" id="ch-reset-binds" style="width:100%;padding:8px 0;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-family:var(--ch-font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;" data-i18n="resetBinds">Reset all keybinds</button>
+      </div>
+      <div class="ch-section-head" data-i18n="session">Session</div>
+      <div>
+        <div class="ch-row"><span class="ch-label" data-i18n="saveOnReload">Save on reload</span><span class="ch-info" data-tip="persist">i</span><label class="ch-switch"><input type="checkbox" id="ch-persist"><span class="ch-slider"></span></label></div>
+        <div class="ch-tooltip" id="tip-persist" data-i18n="tipPersist">When on, your settings (toggles, depth, keybinds, position) persist across page reloads. Turn off to make changes only for this session.</div>
       </div>
     </div>
-    <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;">made by <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> &middot; <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;">Terms &amp; Disclaimer</a></div>
+    <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;"><span data-i18n="madeBy">made by</span> <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> &middot; <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="terms">Terms &amp; Disclaimer</a></div>
   `;
   const wrap = document.createElement('div');
   wrap.id = 'chess-helper-wrap';
@@ -2169,6 +2359,60 @@
   streamerEl.id = 'ch-streamer-text';
   root.append(bubble, wrap, streamerEl);
   document.body.appendChild(root);
+
+
+
+
+
+
+  if (currentLang && currentLang !== "en") { loadLang(currentLang).then(() => applyI18n()); }
+  applyI18n();
+  (function wireLangDropdown() {
+    const sel = panel.querySelector('#ch-lang');
+    if (!sel) return;
+    sel.innerHTML = Object.entries(LANG_INDEX).map(([code, L]) => `<option value="${code}" style="background:#1a1a1c;color:#fff;">${L._name}</option>`).join('');
+    sel.value = currentLang || 'en';
+    sel.onchange = (e) => setLang(e.target.value);
+  })();
+  function showLangPicker(onDone) {
+    const backdrop = document.createElement('div');
+    backdrop.id = 'ch-lang-backdrop';
+    backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100020;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-family:var(--ch-font);';
+    const opts = Object.entries(LANG_INDEX).map(([code, L]) => `<option value="${code}">${L._name}</option>`).join('');
+    backdrop.innerHTML = `
+      <div role="dialog" aria-modal="true" style="width:min(360px,92vw);background:rgba(18,18,20,0.98);border:1px solid var(--ch-border);border-radius:16px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.8);color:#fff;">
+        <h2 style="margin:0 0 4px;font-size:18px;font-weight:700;">Choose your language</h2>
+        <div style="font-size:12px;color:rgba(255,255,255,0.5);margin-bottom:16px;">You can change this later in Settings.</div>
+        <select id="ch-lang-pick" style="width:100%;padding:10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.1);border-radius:10px;font-family:var(--ch-font);font-size:14px;color-scheme:dark;margin-bottom:16px;">${opts}</select>
+        <button id="ch-lang-continue" style="width:100%;padding:11px;border-radius:10px;border:none;background:var(--ch-accent);color:#121212;font-family:var(--ch-font);font-size:13px;font-weight:700;cursor:pointer;">Continue</button>
+      </div>`;
+    document.body.appendChild(backdrop);
+    const sel = backdrop.querySelector('#ch-lang-pick');
+
+    const browser = (navigator.language || '').slice(0, 2).toLowerCase();
+    if (LANG_INDEX[browser]) sel.value = browser;
+
+    const h2 = backdrop.querySelector('h2');
+    const sub = backdrop.querySelector('div[style*="rgba(255,255,255,0.5)"]');
+    const cont = backdrop.querySelector('#ch-lang-continue');
+    const applyPreview = () => {
+      const L = LANG_INDEX[sel.value] || LANG_INDEX.en;
+      h2.textContent = L.langPickerTitle;
+      sub.textContent = L.langPickerSub;
+      cont.textContent = L.langPickerContinue;
+    };
+    applyPreview();
+    sel.onchange = applyPreview;
+    cont.onclick = () => {
+      setLang(sel.value);
+      backdrop.remove();
+      if (onDone) onDone();
+    };
+  }
+  if (!currentLang) {
+    showLangPicker();
+  }
+
   const CURRENT_VERSION = '1.4.2';
   const CHANGELOG = {
     '1.4.2': [ '<b>Depth ≈ ELO estimate</b> under the Depth slider so you can see roughly how strong each depth level plays. Rough estimate, not official — looser for Lozza / Garbochess / p4wn.', '<b>Hidden icon now persists</b> across page reloads — hide it once and chess.com reloading the page won’t bring it back. While hidden, auto-play, arrows, and voice stay paused until you unhide. If you forget the hide keybind, open the browser console (F12) after loading and it prints the current bind.', '<b>Engine loader fixes</b> — Stockfish 10/17 and p4wn no longer sit on the loading animation forever. 60-second fetch and XHR timeouts, SharedArrayBuffer cleanly disabled on iOS Safari, and the overlay reliably hides when the asm.js fallback takes over.' ],
@@ -2191,10 +2435,10 @@
     backdrop.className = 'visible';
     backdrop.innerHTML = `
       <div id="ch-whatsnew-modal" role="dialog" aria-modal="true" aria-labelledby="ch-whatsnew-title">
-        <h2 id="ch-whatsnew-title">What's new in v${CURRENT_VERSION}</h2>
-        <div class="ch-wn-sub">Chess Assist — chess.com helper</div>
+        <h2 id="ch-whatsnew-title">${t('wnTitle')} v${CURRENT_VERSION}</h2>
+        <div class="ch-wn-sub">${t('wnSub')}</div>
         <ul>${items.map(it => `<li>${it}</li>`).join('')}</ul>
-        <button id="ch-whatsnew-ok">Got it</button>
+        <button id="ch-whatsnew-ok">${t('wnOk')}</button>
       </div>`;
     document.body.appendChild(backdrop);
     const close = () => {
@@ -2783,7 +3027,7 @@
       binds[k] = null;
     });
     panel.querySelectorAll('.ch-keybind[data-bind]').forEach(el => {
-      el.textContent = 'Press keys...';
+      el.textContent = t('pressKeys');
     });
     saveSettings();
   };
@@ -3196,17 +3440,17 @@
     if (e.shiftKey) parts.push('Shift');
     if (e.metaKey) parts.push('Win');
     if (!MODS.has(e.key)) parts.push(prettyKey(e.key));
-    return parts.join('+') || 'Press keys...';
+    return parts.join('+') || t('pressKeys');
   }
   function keyLabel(k) {
-    if (!k) return 'Press keys...';
+    if (!k) return t('pressKeys');
     const parts = [];
     if (k.ctrl) parts.push('Ctrl');
     if (k.alt) parts.push('Alt');
     if (k.shift) parts.push('Shift');
     if (k.meta) parts.push('Win');
     if (k.key) parts.push(prettyKey(k.key));
-    return parts.join('+') || 'Press keys...';
+    return parts.join('+') || t('pressKeys');
   }
   function matchesKey(e, k) {
     if (!k) return false;
@@ -3238,7 +3482,7 @@
       if (other !== name && k && bindFingerprint(k) === fp) {
         binds[other] = null;
         const otherEl = panel.querySelector(`.ch-keybind[data-bind="${other}"]`);
-        if (otherEl) otherEl.textContent = 'Press keys...';
+        if (otherEl) otherEl.textContent = t('pressKeys');
       }
     }
     binds[name] = newKey;
@@ -3259,7 +3503,7 @@
         name: el.dataset.bind,
         el
       };
-      el.textContent = 'Press keys...';
+      el.textContent = t('pressKeys');
       el.classList.add('recording');
     };
   });
