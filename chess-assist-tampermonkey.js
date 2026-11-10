@@ -154,8 +154,11 @@
     hi: { _name: "हिन्दी", langPickerTitle: "अपनी भाषा चुनें", langPickerSub: "आप इसे बाद में सेटिंग्स में बदल सकते हैं।", langPickerContinue: "जारी रखें" },
     ar: { _name: "العربية", langPickerTitle: "اختر لغتك", langPickerSub: "يمكنك تغيير ذلك لاحقاً في الإعدادات.", langPickerContinue: "متابعة" }
   };
-  const LANG_CDN = "https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/i18n/";
-
+  const LANG_MIRRORS = [
+    "https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/i18n/",
+    "https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/i18n/",
+    "https://raw.githubusercontent.com/ThatKidGlitchy/chess-engines/main/i18n/"
+  ];
   const LANG_CACHE_TTL = 24 * 60 * 60 * 1000;
   function readCachedLang(code) {
     try {
@@ -169,6 +172,47 @@
   function writeCachedLang(code, data) {
     try { localStorage.setItem("ch-lang-cache-" + code, JSON.stringify({ t: Date.now(), data })); } catch {}
   }
+  function langFetchText(url) {
+    return new Promise((resolve, reject) => {
+      let done = false;
+      const timer = setTimeout(() => { if (!done) { done = true; reject(new Error("timeout")); } }, 15000);
+      try {
+        fetch(url, { cache: "default" }).then(r => {
+          if (!r.ok) throw new Error("HTTP " + r.status);
+          return r.text();
+        }).then(txt => {
+          if (done) return;
+          done = true; clearTimeout(timer); resolve(txt);
+        }).catch(() => {
+          try {
+            const xhr = new XMLHttpRequest();
+            xhr.open("GET", url, true);
+            xhr.onload = () => {
+              if (done) return;
+              if (xhr.status >= 200 && xhr.status < 300) { done = true; clearTimeout(timer); resolve(xhr.responseText); }
+              else { done = true; clearTimeout(timer); reject(new Error("HTTP " + xhr.status)); }
+            };
+            xhr.onerror = () => { if (!done) { done = true; clearTimeout(timer); reject(new Error("network")); } };
+            xhr.send();
+          } catch (e) {
+            if (!done) { done = true; clearTimeout(timer); reject(e); }
+          }
+        });
+      } catch (e) {
+        if (!done) { done = true; clearTimeout(timer); reject(e); }
+      }
+    });
+  }
+  async function langLoadJSON(path) {
+    let lastErr = null;
+    for (const base of LANG_MIRRORS) {
+      try {
+        const txt = await langFetchText(base + path);
+        return JSON.parse(txt);
+      } catch (e) { lastErr = e; }
+    }
+    throw lastErr || new Error("all lang mirrors failed");
+  }
   const _langFetches = {};
   function loadLang(code) {
     if (!LANG_INDEX[code] || code === "en") return Promise.resolve(LANGS[code] || null);
@@ -176,10 +220,9 @@
     const cached = readCachedLang(code);
     if (cached) { LANGS[code] = cached; return Promise.resolve(cached); }
     if (_langFetches[code]) return _langFetches[code];
-    _langFetches[code] = fetch(LANG_CDN + code + ".json", { cache: "default" })
-      .then(r => r.ok ? r.json() : null)
+    _langFetches[code] = langLoadJSON(code + ".json")
       .then(data => { if (data) { LANGS[code] = data; writeCachedLang(code, data); } return data; })
-      .catch(() => null)
+      .catch(err => { console.warn("[Chess Assist] lang load failed for", code, err && err.message); return null; })
       .finally(() => { delete _langFetches[code]; });
     return _langFetches[code];
   }
