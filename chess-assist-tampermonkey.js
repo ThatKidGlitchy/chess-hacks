@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Chess Assist
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.4.2
+// @version      1.4.3
 // @description  Chess.com assistant with 14 selectable engines (Stockfish 8-19, Lozza, Garbochess), auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection, custom skins, and per-engine depth memory.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
@@ -2443,8 +2443,9 @@
     showLangPicker();
   }
 
-  const CURRENT_VERSION = '1.4.2';
+  const CURRENT_VERSION = '1.4.3';
   const CHANGELOG = {
+    '1.4.3': [ '<b>Interface in 16 languages</b> — English, Español, Français, Deutsch, Português, Русский, Italiano, Polski, Nederlands, Türkçe, 简体中文, 日本語, 한국어, Українська, हिन्दी, العربية. First-run picker; switch any time in Settings → Language. Non-English dictionaries fetched on demand from CDN with a 24hr local cache, so the extension stays small.', '<b>Smart text fit</b> — translated labels that would be wider than the English equivalent scale their font-size down automatically, so long German, Dutch or Russian strings never push the opacity slider or anything else outside the panel borders.', '<b>Detection stats persist until the next game</b> — accuracy, best-move rate, CPL and suspicion score stay visible after the game ends, through the lobby, and only clear once the first move of a new game is tracked. Reviewing a finished game no longer wipes the numbers mid-review.' ],
     '1.4.2': [ '<b>Depth ≈ ELO estimate</b> under the Depth slider so you can see roughly how strong each depth level plays. Rough estimate, not official — looser for Lozza / Garbochess / p4wn.', '<b>Hidden icon now persists</b> across page reloads — hide it once and chess.com reloading the page won’t bring it back. While hidden, auto-play, arrows, and voice stay paused until you unhide. If you forget the hide keybind, open the browser console (F12) after loading and it prints the current bind.', '<b>Engine loader fixes</b> — Stockfish 10/17 and p4wn no longer sit on the loading animation forever. 60-second fetch and XHR timeouts, SharedArrayBuffer cleanly disabled on iOS Safari, and the overlay reliably hides when the asm.js fallback takes over.' ],
     '1.4.0': [ '<b>Streamer mode</b> — shows the best move as a small floating text pill ("F1 TO C4") instead of an arrow on the board. Drag it anywhere on the screen, resize it, position it behind your stream overlay.', '<b>Premade piece sets</b> — a second page on the Skins tab with 188 open-source piece sets from Lichess, Rhosgfx, and Sharechess. Click a tile and the whole set applies at once.', '<b>Two-page Gameplay and Skins tabs</b> — pager arrows at the top so the panel stays short while fitting more features. Room to grow.', '<b>UI opacity slider</b> — in the Settings tab. Fade the whole helper UI from 100% down to 5% if it gets in the way of the board.', '<b>Hidden arrows darkness slider</b> — tune how strong the square shading is, from barely visible to easy to spot.', '<b>Settings tab reorganized</b> into Engine / Appearance / Keybinds / Session sections so things aren\'t squeezed together.', '<b>Bug fixes and polish</b> across the panel, keybinds, and arrow drawing.' ]
   };
