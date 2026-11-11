@@ -3059,7 +3059,17 @@
     try {
       const board = await chLoadJSON('/' + entry.file);
       if (board.board) {
-        savedSkins.board = board.board;
+        if (board.board.startsWith('data:')) {
+          savedSkins.board = board.board;
+        } else {
+          try {
+            const svgText = await chFetchText(board.board + (board.board.includes('?') ? '&' : '?') + 'v=' + Date.now());
+            const embedded = svgText.match(/<image[^>]*(?:xlink:)?href=["'](data:image\/[^"']+)["']/i);
+            savedSkins.board = embedded ? embedded[1] : board.board;
+          } catch {
+            savedSkins.board = board.board;
+          }
+        }
       }
       delete savedSkins.lightTiles;
       delete savedSkins.darkTiles;
