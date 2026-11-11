@@ -1963,7 +1963,6 @@
   let oppAbort = null;
   let _lastSyncDetection = 0, _lastInActive = false, _lastGip = false;
   async function tick() {
-    if (uiHidden) return;
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice && !window.chessHelper.streamer) return;
     const _active = inActiveGame();
     if (_active && !_lastInActive && window.chessHelper.autoPlay) {
@@ -2179,7 +2178,6 @@
   let _mutDebounce = null;
   const obs = new MutationObserver(() => {
     if (drawing) return;
-    if (uiHidden) return;
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice && !window.chessHelper.streamer) return;
     if (_mutDebounce) return;
     _mutDebounce = setTimeout(() => {
@@ -3443,30 +3441,10 @@
     saveSettings();
   };
   applyStreamerStyle();
-  let autoPlayBeforeHide = false;
   function toggleUI() {
     uiHidden = !uiHidden;
     root.style.display = uiHidden ? 'none' : '';
     saveSettings();
-    if (uiHidden) {
-      clearArrows();
-      clearShading();
-      clearOpponentArrow();
-      stopVoice();
-      autoPlayBeforeHide = window.chessHelper.autoPlay;
-      if (autoPlayBeforeHide) {
-        window.chessHelper.autoPlay = false;
-        panel.querySelector('#ch-auto').checked = false;
-      }
-    } else {
-      if (autoPlayBeforeHide) {
-        const cb = panel.querySelector('#ch-auto');
-        cb.checked = true;
-        cb.dispatchEvent(new Event('change'));
-      }
-      lastFen = '';
-      tick();
-    }
   }
   const binds = {
     hide: null,
