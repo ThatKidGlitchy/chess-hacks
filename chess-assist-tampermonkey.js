@@ -3063,8 +3063,7 @@
           savedSkins.board = board.board;
         } else {
           const svgText = await chFetchText(board.board + (board.board.includes('?') ? '&' : '?') + 'v=' + Date.now());
-          const b64 = btoa(unescape(encodeURIComponent(svgText)));
-          savedSkins.board = 'data:image/svg+xml;base64,' + b64;
+          savedSkins.board = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svgText).replace(/'/g, '%27').replace(/"/g, '%22');
         }
       }
       delete savedSkins.lightTiles;
