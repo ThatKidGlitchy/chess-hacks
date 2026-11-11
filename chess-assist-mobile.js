@@ -1,4 +1,4 @@
-// Chess Assist (Mobile) v1.4.2 — https://github.com/ThatKidGlitchy/chess-hacks
+// Chess Assist (Mobile) v1.4.3 — https://github.com/ThatKidGlitchy/chess-hacks
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
@@ -1523,7 +1523,7 @@
   wrap.append(panel, evalBar);
   root.append(bubble, wrap); document.body.appendChild(root);
 
-  const CURRENT_VERSION = '1.4.2';
+  const CURRENT_VERSION = '1.4.3';
   const CHANGELOG = {
     '1.4.2': [
       '<b>Depth ≈ ELO estimate</b> under the Depth slider so you can see roughly how strong each depth level plays. Rough estimate, not official — looser for Lozza / Garbochess / p4wn.',
