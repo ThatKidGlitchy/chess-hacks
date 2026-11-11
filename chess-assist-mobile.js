@@ -1846,7 +1846,7 @@
     grid.innerHTML = premadeCatalog.map(s => {
       const active = s.id === activePremadeId ? ' active' : '';
       const hay = ((s.name || '') + ' ' + (s.id || '') + ' ' + (s.author || '')).toLowerCase();
-      return `<div class="ch-premade-tile${active}" data-id="${esc(s.id)}" data-hay="${esc(hay)}"><img src="${s.thumb}" alt="" loading="lazy"><div class="ch-premade-name">${esc(s.name)}</div></div>`;
+      return `<div class="ch-premade-tile${active}" data-id="${esc(s.id)}" data-hay="${esc(hay)}"><img src="${s.thumb}" alt="" decoding="async"><div class="ch-premade-name">${esc(s.name)}</div></div>`;
     }).join('');
     grid.querySelectorAll('.ch-premade-tile').forEach(tile => { tile.onclick = () => applyPremade(tile.dataset.id); });
   }
