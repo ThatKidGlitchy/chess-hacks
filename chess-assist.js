@@ -1,10 +1,16 @@
-// Chess Assist v1.4.3 — https://github.com/ThatKidGlitchy/chess-hacks
+// Chess Assist v1.4.4 — https://github.com/ThatKidGlitchy/chess-hacks
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
+  if (!document.querySelector('link[data-ch-font]')) {
+    const fontLink = document.createElement('link');
+    fontLink.rel = 'stylesheet';
+    fontLink.href = 'https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap';
+    fontLink.setAttribute('data-ch-font', '1');
+    document.head.appendChild(fontLink);
+  }
   const style = document.createElement('style');
   style.textContent = `
-    @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&display=swap');
     :root { --ch-accent:#81b64c; --ch-accent-hover:#a3d160; --ch-bg:rgba(20,20,23,0.75); --ch-border:rgba(255,255,255,0.1); --ch-radius:20px; --ch-font:'Outfit',system-ui,sans-serif; }
     #chess-helper-root { position:fixed; left:0; top:0; width:0; height:0; overflow:visible; pointer-events:none !important; z-index:99999; font-family:var(--ch-font); }
     #chess-helper-bubble { position:fixed; width:52px; height:52px; background:var(--ch-bg); backdrop-filter:blur(20px); border:1px solid var(--ch-border); border-radius:50%; box-shadow:0 10px 40px -10px #0008; display:flex; align-items:center; justify-content:center; cursor:grab; color:#fff; pointer-events:auto; z-index:100000; user-select:none; transition:transform .2s; }
@@ -13,7 +19,7 @@
     #chess-helper-wrap { position:fixed; visibility:hidden; display:flex; align-items:stretch; gap:8px; opacity:0; transform:scale(0.9); transition:opacity .25s, transform .3s; pointer-events:none; }
     #chess-helper-wrap.visible { visibility:visible; opacity:1; transform:scale(1); pointer-events:auto; }
     #chess-helper-wrap:not(.visible), #chess-helper-wrap:not(.visible) * { pointer-events:none !important; }
-    #chess-helper-panel { width:280px; background:rgba(18,18,20,0.85); backdrop-filter:blur(24px); border:1px solid var(--ch-border); border-radius:var(--ch-radius); padding:20px; display:flex; flex-direction:column; gap:14px; box-shadow:0 20px 60px #0009; pointer-events:auto; }
+    #chess-helper-panel { width:280px; background:rgba(18,18,20,0.85); backdrop-filter:blur(24px); border:1px solid var(--ch-border); border-radius:var(--ch-radius); padding:20px 20px 4px; display:flex; flex-direction:column; gap:14px; box-shadow:0 20px 60px #0009; pointer-events:auto; }
     #ch-eval-bar { width:32px; border-radius:14px; overflow:hidden; background:#000; box-shadow:0 10px 40px -10px #0008; position:relative; pointer-events:auto; min-height:200px; }
     #ch-eval-white { position:absolute; bottom:0; left:0; right:0; background:#fff; transition:height .6s ease; height:50%; }
     .ch-eval-pct { position:absolute; width:100%; text-align:center; font-size:10px; font-weight:700; font-family:var(--ch-font); z-index:2; left:0; }
@@ -61,13 +67,14 @@
     .ch-pager-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.2); cursor:pointer; transition:.15s; }
     .ch-pager-dot.active { background:var(--ch-accent); width:16px; border-radius:3px; }
     .ch-pager-count { font-size:11px; font-weight:600; color:rgba(255,255,255,0.5); font-variant-numeric:tabular-nums; min-width:28px; text-align:center; }
-    .ch-gameplay-page, .ch-skins-page { display:none; flex-direction:column; gap:14px; }
+    .ch-gameplay-page, .ch-skins-page { display:none; flex-direction:column; gap:14px; font-family:var(--ch-font); }
     .ch-gameplay-page.active, .ch-skins-page.active { display:flex; }
-    .ch-premade-tile { position:relative; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 4px 6px; cursor:pointer; transition:.15s; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .ch-premade-tile { position:relative; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 4px 6px; cursor:pointer; transition:.15s; display:flex; flex-direction:column; align-items:center; gap:4px; font-family:var(--ch-font); }
     .ch-premade-tile:hover { background:rgba(255,255,255,0.1); border-color:var(--ch-accent); }
     .ch-premade-tile.active { background:rgba(129,182,76,0.15); border-color:var(--ch-accent); }
     .ch-premade-tile img { width:40px; height:40px; pointer-events:none; }
-    .ch-premade-tile .ch-premade-name { font-size:10px; color:rgba(255,255,255,0.7); text-align:center; line-height:1.2; word-break:break-word; }
+    .ch-premade-tile .ch-premade-name { font-size:10px; color:rgba(255,255,255,0.7); text-align:center; line-height:1.2; word-break:break-word; font-family:var(--ch-font); }
+    .ch-premade-empty { font-family:var(--ch-font); }
     .ch-section-head { font-size:10px; font-weight:700; color:rgba(255,255,255,0.4); letter-spacing:1.5px; text-transform:uppercase; padding:4px 0 2px; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:2px; }
     .ch-section-head:not(:first-child) { margin-top:6px; }
     #ch-streamer-text { position:fixed; top:16px; left:50%; transform:translateX(-50%); display:none; padding:.45em 1em; border-radius:14px; background:var(--ch-bg); backdrop-filter:blur(20px); border:1px solid var(--ch-border); color:#fff; font-family:var(--ch-font); font-size:22px; font-weight:700; letter-spacing:0.5px; z-index:99998; white-space:nowrap; box-shadow:0 10px 40px -10px #0008; cursor:grab; touch-action:none; user-select:none; -webkit-user-select:none; pointer-events:auto !important; }
@@ -89,7 +96,7 @@
     .ch-tab { flex:1; padding:7px 0; border:none; background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.45); font-family:var(--ch-font); font-size:11px; font-weight:600; cursor:pointer; border-radius:10px; transition:.2s; }
     .ch-tab:hover { background:rgba(255,255,255,0.1); color:rgba(255,255,255,0.7); }
     .ch-tab.active { background:var(--ch-accent); color:#121212; }
-    .ch-tab-content { display:none; flex-direction:column; gap:14px; }
+    .ch-tab-content { display:none; flex-direction:column; gap:14px; font-family:var(--ch-font); }
     .ch-tab-content.active { display:flex; }
     .ch-detect-stat { display:flex; justify-content:space-between; align-items:center; padding:2px 0; }
     .ch-detect-label { font-size:12px; color:rgba(255,255,255,0.55); font-weight:500; }
@@ -99,15 +106,15 @@
     .ch-detect-verdict { text-align:center; font-size:12px; font-weight:600; color:rgba(255,255,255,0.4); padding:2px 0; }
     .ch-detect-reset { padding:8px; border-radius:10px; border:1px solid rgba(255,255,255,0.08); background:rgba(255,255,255,0.04); color:rgba(255,255,255,0.6); font-family:var(--ch-font); font-size:12px; font-weight:600; cursor:pointer; transition:.2s; text-align:center; }
     .ch-detect-reset:hover { background:rgba(255,255,255,0.1); color:#fff; }
-    .ch-skins-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; }
-    .ch-skin-tile { aspect-ratio:1; background:rgba(255,255,255,0.1); border-radius:6px; cursor:pointer; position:relative; display:flex; align-items:center; justify-content:center; background-size:contain; background-position:center; background-repeat:no-repeat; transition:.15s; }
+    .ch-skins-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:4px; font-family:var(--ch-font); }
+    .ch-skin-tile { aspect-ratio:1; background:rgba(255,255,255,0.1); border-radius:6px; cursor:pointer; position:relative; display:flex; align-items:center; justify-content:center; background-size:contain; background-position:center; background-repeat:no-repeat; transition:.15s; font-family:var(--ch-font); }
     .ch-skin-tile:hover { background-color:rgba(255,255,255,0.18); }
     .ch-skin-tile.wide { grid-column:span 3; aspect-ratio:3/1; }
-    .ch-skin-label { font-size:16px; color:rgba(255,255,255,0.8); pointer-events:none; line-height:1; }
+    .ch-skin-label { font-size:16px; color:rgba(255,255,255,0.8); pointer-events:none; line-height:1; font-family:var(--ch-font); }
     .ch-skin-tile.has-skin .ch-skin-label { display:none; }
     .ch-skin-remove { display:none; position:absolute; top:-4px; right:-4px; width:14px; height:14px; border-radius:50%; background:#e04040; color:#fff; border:none; font-size:10px; line-height:14px; text-align:center; padding:0; cursor:pointer; z-index:2; }
     .ch-skin-tile.has-skin:hover .ch-skin-remove { display:block; }
-    .ch-skins-row-label { font-size:10px; color:rgba(255,255,255,0.3); font-weight:600; grid-column:span 6; text-align:center; margin:2px 0 -2px; }
+    .ch-skins-row-label { font-size:10px; color:rgba(255,255,255,0.3); font-weight:600; grid-column:span 6; text-align:center; margin:2px 0 -2px; font-family:var(--ch-font); }
   `;
   document.head.appendChild(style);
   window.chessHelper = {
@@ -120,9 +127,6 @@
     voice: false,
     streamer: false
   };
-
-
-
 
   const LANG_INDEX = {
     en: { _name: "English", langPickerTitle: "Choose your language", langPickerSub: "You can change this later in Settings.", langPickerContinue: "Continue" },
@@ -143,14 +147,14 @@
     ar: { _name: "العربية", langPickerTitle: "اختر لغتك", langPickerSub: "يمكنك تغيير ذلك لاحقاً في الإعدادات.", langPickerContinue: "متابعة" }
   };
   const LANG_MIRRORS = [
-    "https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/i18n/",
-    "https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/i18n/",
+    "https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/i18n/",
+    "https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/i18n/",
     "https://raw.githubusercontent.com/ThatKidGlitchy/chess-engines/main/i18n/"
   ];
   const LANG_CACHE_TTL = 24 * 60 * 60 * 1000;
   function readCachedLang(code) {
     try {
-      const raw = localStorage.getItem("ch-lang-cache-" + code);
+      const raw = localStorage.getItem("ch-lang-cache-v2-" + code);
       if (!raw) return null;
       const obj = JSON.parse(raw);
       if (!obj || !obj.data || (Date.now() - obj.t) > LANG_CACHE_TTL) return null;
@@ -158,7 +162,9 @@
     } catch { return null; }
   }
   function writeCachedLang(code, data) {
-    try { localStorage.setItem("ch-lang-cache-" + code, JSON.stringify({ t: Date.now(), data })); } catch {}
+    try { localStorage.setItem("ch-lang-cache-v2-" + code, JSON.stringify({ t: Date.now(), data })); } catch {}
+
+    try { Object.keys(localStorage).forEach(k => { if (k.startsWith("ch-lang-cache-") && !k.startsWith("ch-lang-cache-v2-")) localStorage.removeItem(k); }); } catch {}
   }
   function langFetchText(url) {
     return new Promise((resolve, reject) => {
@@ -225,10 +231,6 @@
   const DEPTH_ELO_TABLE = [null, 1500, 1700, 1900, 2100, 2300, 2500, 2700, 2850, 2950, 3050, 3100, 3150, 3200, 3250, 3300, 3350, 3400, 3430, 3460, 3490, 3510, 3530, 3550, 3600];
   function depthToElo(d) { return DEPTH_ELO_TABLE[Math.max(1, Math.min(24, d|0))] || 3200; }
 
-
-
-
-
   const LANGS = {
     en: {
       _name: 'English',
@@ -249,6 +251,8 @@
       pieceMask: 'Piece mask', resetSkins: 'Reset all skins',
       premadeHint: 'Premade piece sets — click to apply all 12 pieces at once',
       searchSets: 'Search sets…', clearPremade: 'Clear premade pieces', loadingCatalog: 'Loading catalog…',
+      boardsHint: 'Board themes — click a tile to apply the board artwork',
+      searchBoards: 'Search boards…', clearBoard: 'Clear board', boardsCredit: 'Boards by NikAgs.',
       setsCredit: 'Sets by Lichess, Rhosgfx, Sharechess.', fullCredits: 'Full credits',
       engineLabel: 'Engine', appearance: 'Appearance', keybinds: 'Keybinds', session: 'Session', strength: 'Strength',
       opacity: 'Opacity', resetBinds: 'Reset all keybinds', saveOnReload: 'Save on reload',
@@ -297,7 +301,6 @@
     loadLang(lang).then(() => applyI18n());
   }
   function applyI18n() {
-
 
     const root = document.getElementById('chess-helper-panel');
     if (!root) return;
@@ -1341,7 +1344,7 @@
     }
     engineDepths[currentEngine] = ENGINE_DEPTH;
     currentEngine = newKey;
-    showLoadingOverlay(t('loadingEngine') + ' — ' + (ENGINES[newKey].label || newKey));
+    showLoadingOverlay(t('loadingEngine'));
     if (typeof engineDepths[newKey] === 'number') ENGINE_DEPTH = engineDepths[newKey];
     try {
       if (activeSearchHandler && sfWorker) {
@@ -1730,9 +1733,22 @@
     const fenBefore = getFEN();
     const needsPromo = isPromotion(fenBefore, from, to);
     const promoChar = move.length > 4 ? move[4] : 'q';
+    const expectedTurn = fenBefore && fenBefore.split(' ')[1];
+    const myColor = getMyColor();
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (attempt > 0) {
+        const curFen = getFEN();
+        if (!curFen) return;
+        if (curFen.split(' ')[0] !== fenBefore.split(' ')[0]) return;
+        if (curFen.split(' ')[1] !== expectedTurn) return;
+        if (curFen.split(' ')[1] !== myColor) return;
+      }
       clickSquare(from);
       await new Promise(r => setTimeout(r, 200 + attempt * 100));
+      {
+        const curFen = getFEN();
+        if (curFen && curFen.split(' ')[1] !== myColor) return;
+      }
       clickSquare(to);
       await new Promise(r => setTimeout(r, 300));
       if (needsPromo) {
@@ -1951,6 +1967,7 @@
   let oppAbort = null;
   let _lastSyncDetection = 0, _lastInActive = false, _lastGip = false;
   async function tick() {
+    if (uiHidden) return;
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice && !window.chessHelper.streamer) return;
     const _active = inActiveGame();
     if (_active && !_lastInActive && window.chessHelper.autoPlay) {
@@ -2145,8 +2162,19 @@
         await makeMove(mv);
         const fenAfter = getFEN();
         if (fenAfter !== fen) {
-          lastMovedFen = fenAfter;
-          waitingForOpponent = true;
+
+
+
+
+          const _afterTurn = fenAfter && fenAfter.split(' ')[1];
+          if (_afterTurn && _afterTurn !== getMyColor()) {
+            lastMovedFen = fenAfter;
+            waitingForOpponent = true;
+          } else {
+            lastMovedFen = '';
+            waitingForOpponent = false;
+            lastFen = '';
+          }
         } else {
           lastFen = '';
         }
@@ -2166,6 +2194,7 @@
   let _mutDebounce = null;
   const obs = new MutationObserver(() => {
     if (drawing) return;
+    if (uiHidden) return;
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice && !window.chessHelper.streamer) return;
     if (_mutDebounce) return;
     _mutDebounce = setTimeout(() => {
@@ -2324,8 +2353,9 @@
       <div class="ch-pager-dots">
         <div class="ch-pager-dot active" data-page="1"></div>
         <div class="ch-pager-dot" data-page="2"></div>
+        <div class="ch-pager-dot" data-page="3"></div>
       </div>
-      <span class="ch-pager-count" id="ch-sk-count">1/2</span>
+      <span class="ch-pager-count" id="ch-sk-count">1/3</span>
       <button class="ch-pager-arrow" id="ch-sk-next" data-dir="1" aria-label="Next page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="ch-skins-page active" data-page="1">
@@ -2366,6 +2396,15 @@
       <button class="ch-detect-reset" id="ch-premade-clear" data-i18n="clearPremade">Clear premade pieces</button>
       <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;"><span data-i18n="setsCredit">Sets by Lichess, Rhosgfx, Sharechess.</span> <a href="https://github.com/ThatKidGlitchy/chess-engines/blob/main/skins/CREDITS.txt" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="fullCredits">Full credits</a>.</div>
     </div>
+    <div class="ch-skins-page" data-page="3">
+      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;" data-i18n="boardsHint">Board themes — click a tile to apply the board artwork</div>
+      <input type="text" id="ch-board-search" placeholder="Search boards…" data-i18n-ph="searchBoards" style="width:100%;padding:7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;box-sizing:border-box;margin-bottom:6px;">
+      <div id="ch-board-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:240px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;padding-right:2px;">
+        <div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;" data-i18n="loadingCatalog">Loading catalog…</div>
+      </div>
+      <button class="ch-detect-reset" id="ch-board-clear" data-i18n="clearBoard">Clear board</button>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;"><span data-i18n="boardsCredit">Boards by NikAgs.</span> <a href="https://github.com/NikAgs/ChessSkins" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="fullCredits">Full credits</a>.</div>
+    </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-settings">
       <div class="ch-section-head" data-i18n="engineLabel">Engine</div>
@@ -2405,7 +2444,7 @@
         <div class="ch-tooltip" id="tip-persist" data-i18n="tipPersist">When on, your settings (toggles, depth, keybinds, position) persist across page reloads. Turn off to make changes only for this session.</div>
       </div>
     </div>
-    <div style="text-align:center;padding:8px 0 2px;font-size:10px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;"><span data-i18n="madeBy">made by</span> <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> &middot; <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="terms">Terms &amp; Disclaimer</a></div>
+    <div style="text-align:center;padding:2px 0 0;font-size:9px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;line-height:1.1;"><span data-i18n="madeBy">made by</span> <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> &middot; <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="terms">Terms &amp; Disclaimer</a><div style="font-size:8px;color:rgba(255,255,255,0.10);font-family:var(--ch-font);font-weight:600;letter-spacing:0.3px;margin-top:4px;font-variant-numeric:tabular-nums;">v1.4.4</div></div>
   `;
   const wrap = document.createElement('div');
   wrap.id = 'chess-helper-wrap';
@@ -2418,11 +2457,6 @@
   streamerEl.id = 'ch-streamer-text';
   root.append(bubble, wrap, streamerEl);
   document.body.appendChild(root);
-
-
-
-
-
 
   if (currentLang && currentLang !== "en") { loadLang(currentLang).then(() => applyI18n()); }
   applyI18n();
@@ -2468,12 +2502,20 @@
       if (onDone) onDone();
     };
   }
+  let _wnDeferred = false;
   if (!currentLang) {
-    showLangPicker();
+    _wnDeferred = true;
+    showLangPicker(() => {
+      const code = currentLang || 'en';
+      const fire = () => { try { showWhatsNew(false); } catch {} };
+      if (code === 'en' || LANGS[code]) fire();
+      else loadLang(code).then(fire).catch(fire);
+    });
   }
 
-  const CURRENT_VERSION = '1.4.3';
+  const CURRENT_VERSION = '1.4.4';
   const CHANGELOG = {
+    '1.4.4': [ '<b>Boards tab</b> — third page on the Skins tab with a gallery of board themes. Click a tile and the board artwork applies instantly. Searchable, like the premade piece sets, with full credits to the original artists.', '<b>More premade piece sets</b> — expanded the Lichess / Rhosgfx / Sharechess catalog so there are more options on the premade page without having to upload your own.', '<b>Auto-play no longer freezes against fast opponents</b> — if the opponent premoves or replies in under ~300 ms, their move was already on the board by the time the script finished playing yours, which left auto-play stuck waiting for a FEN change that had already happened. Auto-play now detects this case and keeps going immediately.' ],
     '1.4.3': [ '<b>Interface in 16 languages</b> — English, Español, Français, Deutsch, Português, Русский, Italiano, Polski, Nederlands, Türkçe, 简体中文, 日本語, 한국어, Українська, हिन्दी, العربية. First-run picker; switch any time in Settings → Language. Non-English dictionaries fetched on demand from CDN with a 24hr local cache, so the extension stays small.', '<b>Smart text fit</b> — translated labels that would be wider than the English equivalent scale their font-size down automatically, so long German, Dutch or Russian strings never push the opacity slider or anything else outside the panel borders.', '<b>Detection stats persist until the next game</b> — accuracy, best-move rate, CPL and suspicion score stay visible after the game ends, through the lobby, and only clear once the first move of a new game is tracked. Reviewing a finished game no longer wipes the numbers mid-review.' ],
     '1.4.2': [ '<b>Depth ≈ ELO estimate</b> under the Depth slider so you can see roughly how strong each depth level plays. Rough estimate, not official — looser for Lozza / Garbochess / p4wn.', '<b>Hidden icon now persists</b> across page reloads — hide it once and chess.com reloading the page won’t bring it back. While hidden, auto-play, arrows, and voice stay paused until you unhide. If you forget the hide keybind, open the browser console (F12) after loading and it prints the current bind.', '<b>Engine loader fixes</b> — Stockfish 10/17 and p4wn no longer sit on the loading animation forever. 60-second fetch and XHR timeouts, SharedArrayBuffer cleanly disabled on iOS Safari, and the overlay reliably hides when the asm.js fallback takes over.' ],
     '1.4.0': [ '<b>Streamer mode</b> — shows the best move as a small floating text pill ("F1 TO C4") instead of an arrow on the board. Drag it anywhere on the screen, resize it, position it behind your stream overlay.', '<b>Premade piece sets</b> — a second page on the Skins tab with 188 open-source piece sets from Lichess, Rhosgfx, and Sharechess. Click a tile and the whole set applies at once.', '<b>Two-page Gameplay and Skins tabs</b> — pager arrows at the top so the panel stays short while fitting more features. Room to grow.', '<b>UI opacity slider</b> — in the Settings tab. Fade the whole helper UI from 100% down to 5% if it gets in the way of the board.', '<b>Hidden arrows darkness slider</b> — tune how strong the square shading is, from barely visible to easy to spot.', '<b>Settings tab reorganized</b> into Engine / Appearance / Keybinds / Session sections so things aren\'t squeezed together.', '<b>Bug fixes and polish</b> across the panel, keybinds, and arrow drawing.' ]
@@ -2488,7 +2530,10 @@
       }
     })();
     if (!force && seen === CURRENT_VERSION) return;
-    const items = CHANGELOG[CURRENT_VERSION] || [];
+    const changelogKey = 'changelog_' + CURRENT_VERSION.replace(/\./g, '_');
+    const langPack = (currentLang && LANGS[currentLang]) || {};
+    const translated = Array.isArray(langPack[changelogKey]) ? langPack[changelogKey] : null;
+    const items = (translated && translated.length) ? translated : (CHANGELOG[CURRENT_VERSION] || []);
     if (!items.length) return;
     const backdrop = document.createElement('div');
     backdrop.id = 'ch-whatsnew-backdrop';
@@ -2519,7 +2564,15 @@
     });
   }
   window.chessHelper.showWhatsNew = () => showWhatsNew(true);
-  setTimeout(() => showWhatsNew(false), 400);
+  window.chessHelper._debug = () => ({
+    version: CURRENT_VERSION,
+    langMirror: LANG_MIRRORS[0],
+    currentLang,
+    langLoaded: !!LANGS[currentLang],
+    hasChangelogKey: !!(LANGS[currentLang] && LANGS[currentLang]['changelog_' + CURRENT_VERSION.replace(/\./g, '_')]),
+    firstBullet: (LANGS[currentLang] && LANGS[currentLang]['changelog_' + CURRENT_VERSION.replace(/\./g, '_')] || [''])[0].slice(0, 80)
+  });
+  if (!_wnDeferred) setTimeout(() => showWhatsNew(false), 400);
   panel.querySelectorAll('.ch-info[data-tip]').forEach(el => {
     el.onclick = () => {
       const tip = panel.querySelector('#tip-' + el.dataset.tip);
@@ -2789,6 +2842,7 @@
     const count = panel.querySelector('#ch-sk-count');
     if (count) count.textContent = skinsPage + '/' + skinsPageCount;
     if (skinsPage === 2 && !premadeCatalog) loadPremadeCatalog();
+    if (skinsPage === 3 && !boardCatalog) loadBoardCatalog();
   }
   panel.querySelector('#ch-sk-prev').onclick = () => setSkinsPage(skinsPage - 1);
   panel.querySelector('#ch-sk-next').onclick = () => setSkinsPage(skinsPage + 1);
@@ -2797,8 +2851,8 @@
   });
   setSkinsPage(1);
   const PREMADE_BASES = [
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main',
     'https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main',
     'https://raw.githubusercontent.com/ThatKidGlitchy/chess-engines/main'
   ];
   let premadeCatalog = null, activePremadeId = '';
@@ -2811,7 +2865,7 @@
     const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
     grid.innerHTML = premadeCatalog.map(s => {
       const active = s.id === activePremadeId ? ' active' : '';
-      const hay = ((s.name || '') + ' ' + (s.id || '') + ' ' + (s.author || '')).toLowerCase();
+      const hay = (s.name || '').toLowerCase();
       return `<div class="ch-premade-tile${active}" data-id="${esc(s.id)}" data-hay="${esc(hay)}" title="${esc(s.name)} — ${esc(s.author || 'unknown')} (${esc(s.license || '—')})"><img src="${s.thumb}" alt="" loading="lazy"><div class="ch-premade-name">${esc(s.name)}</div></div>`;
     }).join('');
     grid.querySelectorAll('.ch-premade-tile').forEach(tile => {
@@ -2824,7 +2878,7 @@
     q = q.trim().toLowerCase();
     let visible = 0;
     grid.querySelectorAll('.ch-premade-tile').forEach(tile => {
-      const show = !q || tile.dataset.hay.includes(q);
+      const show = !q || tile.dataset.hay.startsWith(q);
       tile.style.display = show ? '' : 'none';
       if (show) visible++;
     });
@@ -2848,7 +2902,7 @@
     grid.querySelectorAll('.ch-premade-tile').forEach(t => t.classList.toggle('active', t.dataset.id === activePremadeId));
   }
   function chFetchText(url) {
-    return fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).catch(() => new Promise((res, rej) => {
+    return fetch(url, { cache: 'reload' }).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); }).catch(() => new Promise((res, rej) => {
       try {
         const xhr = new XMLHttpRequest();
         xhr.open('GET', url, true);
@@ -2860,8 +2914,9 @@
   }
   async function chLoadJSON(path) {
     let lastErr = null;
+    const bust = '?v=' + Date.now();
     for (const base of PREMADE_BASES) {
-      const url = base + path;
+      const url = base + path + bust;
       try {
         const txt = await chFetchText(url);
         const trimmed = txt.trimStart();
@@ -2932,6 +2987,105 @@
     renderSkinTiles();
     applySkins();
     refreshPremadeActive();
+  };
+  let boardCatalog = null, activeBoardId = '';
+  try { activeBoardId = localStorage.getItem('ch-board-active') || ''; } catch {}
+  function buildBoardGrid() {
+    const grid = panel.querySelector('#ch-board-grid');
+    if (!grid || !boardCatalog) return;
+    const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
+    grid.innerHTML = boardCatalog.map(b => {
+      const active = b.id === activeBoardId ? ' active' : '';
+      const hay = (b.name || '').toLowerCase();
+      return `<div class="ch-premade-tile${active}" data-id="${esc(b.id)}" data-hay="${esc(hay)}" title="${esc(b.name)} — ${esc(b.author || 'NikAgs')} (${esc(b.license || 'MIT')})"><img src="${b.thumb}" alt="" loading="lazy"><div class="ch-premade-name">${esc(b.name)}</div></div>`;
+    }).join('');
+    grid.querySelectorAll('.ch-premade-tile').forEach(tile => {
+      tile.onclick = () => applyBoard(tile.dataset.id);
+    });
+  }
+  function filterBoardGrid(q) {
+    const grid = panel.querySelector('#ch-board-grid');
+    if (!grid) return;
+    q = q.trim().toLowerCase();
+    let visible = 0;
+    grid.querySelectorAll('.ch-premade-tile').forEach(tile => {
+      const show = !q || tile.dataset.hay.startsWith(q);
+      tile.style.display = show ? '' : 'none';
+      if (show) visible++;
+    });
+    let empty = grid.querySelector('.ch-premade-empty');
+    if (visible === 0) {
+      if (!empty) {
+        empty = document.createElement('div');
+        empty.className = 'ch-premade-empty';
+        empty.style.cssText = 'grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;';
+        grid.appendChild(empty);
+      }
+      empty.textContent = 'No boards match.';
+      empty.style.display = '';
+    } else if (empty) {
+      empty.style.display = 'none';
+    }
+  }
+  function refreshBoardActive() {
+    const grid = panel.querySelector('#ch-board-grid');
+    if (!grid) return;
+    grid.querySelectorAll('.ch-premade-tile').forEach(t => t.classList.toggle('active', t.dataset.id === activeBoardId));
+  }
+  async function loadBoardCatalog() {
+    try {
+      boardCatalog = await chLoadJSON('/boards/catalog.json');
+      buildBoardGrid();
+    } catch (e) {
+      const grid = panel.querySelector('#ch-board-grid');
+      if (grid) grid.innerHTML = '<div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:#e07040;font-size:11px;padding:20px 0;">Failed to load boards catalog.<br><span style="color:rgba(255,255,255,0.4);">' + String(e.message || e) + '</span></div>';
+    }
+  }
+  async function applyBoard(id) {
+    const entry = (boardCatalog || []).find(b => b.id === id);
+    if (!entry) return;
+    try {
+      const board = await chLoadJSON('/' + entry.file);
+      if (board.board) {
+        if (board.board.startsWith('data:')) {
+          savedSkins.board = board.board;
+        } else {
+          const svgText = await chFetchText(board.board + (board.board.includes('?') ? '&' : '?') + 'v=' + Date.now());
+          const b64 = btoa(unescape(encodeURIComponent(svgText)));
+          savedSkins.board = 'data:image/svg+xml;base64,' + b64;
+        }
+      }
+      delete savedSkins.lightTiles;
+      delete savedSkins.darkTiles;
+      try { localStorage.setItem('ch-skins', JSON.stringify(savedSkins)); } catch {}
+      try { localStorage.setItem('ch-board-active', id); } catch {}
+      activeBoardId = id;
+      renderSkinTiles();
+      applySkins();
+      refreshBoardActive();
+    } catch (e) {
+      console.warn('[Chess Assist] Failed to apply board theme:', e);
+    }
+  }
+  const boardSearch = panel.querySelector('#ch-board-search');
+  if (boardSearch) {
+    let searchTimer = null;
+    boardSearch.oninput = e => {
+      const v = e.target.value;
+      clearTimeout(searchTimer);
+      searchTimer = setTimeout(() => filterBoardGrid(v), 120);
+    };
+  }
+  panel.querySelector('#ch-board-clear').onclick = () => {
+    delete savedSkins.board;
+    delete savedSkins.lightTiles;
+    delete savedSkins.darkTiles;
+    try { localStorage.setItem('ch-skins', JSON.stringify(savedSkins)); } catch {}
+    try { localStorage.removeItem('ch-board-active'); } catch {}
+    activeBoardId = '';
+    renderSkinTiles();
+    applySkins();
+    refreshBoardActive();
   };
   const maskToggle = panel.querySelector('#ch-skin-mask');
   maskToggle.checked = skinMaskMode;
@@ -3429,10 +3583,49 @@
     saveSettings();
   };
   applyStreamerStyle();
+  const HIDE_TOGGLES = [
+    { sel: '#ch-arrow',    key: 'showArrow' },
+    { sel: '#ch-hidden',   key: 'hiddenArrow' },
+    { sel: '#ch-auto',     key: 'autoPlay' },
+    { sel: '#ch-opponent', key: 'showOpponent' },
+    { sel: '#ch-eval',     key: 'showEval' },
+    { sel: '#ch-voice',    key: 'voice' },
+    { sel: '#ch-streamer', key: 'streamer' }
+  ];
+  let togglesBeforeHide = null;
   function toggleUI() {
     uiHidden = !uiHidden;
     root.style.display = uiHidden ? 'none' : '';
     saveSettings();
+    if (uiHidden) {
+      clearArrows();
+      clearShading();
+      clearOpponentArrow();
+      stopVoice();
+      togglesBeforeHide = {};
+      for (const { sel, key } of HIDE_TOGGLES) {
+        const cb = panel.querySelector(sel);
+        if (!cb) continue;
+        togglesBeforeHide[key] = !!cb.checked;
+        if (cb.checked) {
+          cb.checked = false;
+          cb.dispatchEvent(new Event('change'));
+        }
+      }
+    } else {
+      if (togglesBeforeHide) {
+        for (const { sel, key } of HIDE_TOGGLES) {
+          if (!togglesBeforeHide[key]) continue;
+          const cb = panel.querySelector(sel);
+          if (!cb || cb.checked) continue;
+          cb.checked = true;
+          cb.dispatchEvent(new Event('change'));
+        }
+        togglesBeforeHide = null;
+      }
+      lastFen = '';
+      tick();
+    }
   }
   const binds = {
     hide: null,
