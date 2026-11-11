@@ -3057,7 +3057,7 @@
     const entry = (boardCatalog || []).find(b => b.id === id);
     if (!entry) return;
     try {
-      const board = await chLoadJSON('/' + entry.file);
+      const board = (entry.board || entry.lightTiles || entry.darkTiles) ? entry : await chLoadJSON('/' + entry.file);
       if (board.board) {
         if (board.board.startsWith('data:')) {
           savedSkins.board = board.board;
