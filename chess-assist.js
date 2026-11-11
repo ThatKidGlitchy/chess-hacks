@@ -2866,7 +2866,7 @@
     grid.innerHTML = premadeCatalog.map(s => {
       const active = s.id === activePremadeId ? ' active' : '';
       const hay = (s.name || '').toLowerCase();
-      return `<div class="ch-premade-tile${active}" data-id="${esc(s.id)}" data-hay="${esc(hay)}" title="${esc(s.name)} — ${esc(s.author || 'unknown')} (${esc(s.license || '—')})"><img src="${s.thumb}" alt="" loading="lazy"><div class="ch-premade-name">${esc(s.name)}</div></div>`;
+      return `<div class="ch-premade-tile${active}" data-id="${esc(s.id)}" data-hay="${esc(hay)}" title="${esc(s.name)} — ${esc(s.author || 'unknown')} (${esc(s.license || '—')})"><img src="${s.thumb}" alt="" decoding="async"><div class="ch-premade-name">${esc(s.name)}</div></div>`;
     }).join('');
     grid.querySelectorAll('.ch-premade-tile').forEach(tile => {
       tile.onclick = () => applyPremade(tile.dataset.id);
@@ -2997,7 +2997,7 @@
     grid.innerHTML = boardCatalog.map(b => {
       const active = b.id === activeBoardId ? ' active' : '';
       const hay = (b.name || '').toLowerCase();
-      return `<div class="ch-premade-tile${active}" data-id="${esc(b.id)}" data-hay="${esc(hay)}" title="${esc(b.name)} — ${esc(b.author || 'NikAgs')} (${esc(b.license || 'MIT')})"><img src="${b.thumb}" alt="" loading="lazy"><div class="ch-premade-name">${esc(b.name)}</div></div>`;
+      return `<div class="ch-premade-tile${active}" data-id="${esc(b.id)}" data-hay="${esc(hay)}" title="${esc(b.name)} — ${esc(b.author || 'NikAgs')} (${esc(b.license || 'MIT')})"><img src="${b.thumb}" alt="" decoding="async"><div class="ch-premade-name">${esc(b.name)}</div></div>`;
     }).join('');
     grid.querySelectorAll('.ch-premade-tile').forEach(tile => {
       tile.onclick = () => applyBoard(tile.dataset.id);
