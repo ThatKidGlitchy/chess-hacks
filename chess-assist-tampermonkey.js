@@ -1186,7 +1186,7 @@
       if (!_loadingOverlay) {
         _loadingOverlay = document.createElement('div');
         _loadingOverlay.id = 'ch-loading-overlay';
-        _loadingOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:2147483647;display:flex;align-items:center;justify-content:center;font-family:var(--ch-font,sans-serif);color:#fff;backdrop-filter:blur(3px);';
+        _loadingOverlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:99000;display:flex;align-items:center;justify-content:center;font-family:var(--ch-font,sans-serif);color:#fff;backdrop-filter:blur(3px);';
         _loadingOverlay.innerHTML = '<div style="background:#1a1a1c;padding:22px 32px;border-radius:12px;border:1px solid rgba(255,255,255,0.1);display:flex;flex-direction:column;align-items:center;gap:12px;min-width:240px;"><div style="width:32px;height:32px;border:3px solid rgba(255,255,255,0.15);border-top-color:var(--ch-accent,#7fffb0);border-radius:50%;animation:ch-spin 0.8s linear infinite;"></div><div id="ch-loading-label" style="font-size:13px;font-weight:600;letter-spacing:0.3px;">Loading engine...</div><div id="ch-loading-pct" style="font-size:11px;color:rgba(255,255,255,0.55);font-variant-numeric:tabular-nums;">0%</div></div><style>@keyframes ch-spin{to{transform:rotate(360deg);}}</style>';
         document.body.appendChild(_loadingOverlay);
       }
@@ -1447,8 +1447,20 @@
       }
     });
   }
+  let _crashCount = 0;
+  let _crashWindowStart = 0;
   function handleWorkerCrash() {
-    console.warn('[Chess Assist] Engine worker crashed, restarting...');
+    const now = Date.now();
+    if (now - _crashWindowStart > 60000) { _crashWindowStart = now; _crashCount = 0; }
+    _crashCount++;
+    if (_crashCount > 3) {
+      console.warn('[Chess Assist] Engine crashed ' + _crashCount + ' times in 60s — giving up');
+      hideLoadingOverlay();
+      if (sfWorker) { try { sfWorker.terminate(); } catch {} }
+      sfWorker = null; sfReady = false; _initP = null;
+      return;
+    }
+    console.warn('[Chess Assist] Engine worker crashed, restarting... (' + _crashCount + '/3)');
     if (activeSearchHandler && sfWorker) {
       try {
         sfWorker.removeEventListener('message', activeSearchHandler);
@@ -1691,7 +1703,14 @@
     played.push(move);
     positionMoves.set(key, played);
   }
-  initEngine().catch(err => console.warn('[Chess Assist] initial engine load failed:', err));
+  function startEngineInit() {
+    initEngine().catch(err => console.warn('[Chess Assist] initial engine load failed:', err));
+  }
+  try { localStorage.getItem('ch-lang'); } catch {}
+  let _langAlreadyPicked = false;
+  try { _langAlreadyPicked = !!localStorage.getItem('ch-lang'); } catch {}
+  if (_langAlreadyPicked) startEngineInit();
+  else window.__chStartEngine = startEngineInit;
   function clickSquare(sq) {
     const b = getBoard();
     if (!b) return;
@@ -2512,6 +2531,7 @@
       setLang(sel.value);
       backdrop.remove();
       if (onDone) onDone();
+      try { if (window.__chStartEngine) { window.__chStartEngine(); window.__chStartEngine = null; } } catch {}
     };
   }
   let _wnDeferred = false;
