@@ -2,6 +2,8 @@
 
 Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
 
+the chess-assist.js and other files are having some issues loading the engines correctly so please be patient a fix is coming soon
+
 **Current version: v1.4.3**
 
 ![Chess Assist — Gameplay](.github/screenshot-gameplay.png)
