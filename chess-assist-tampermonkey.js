@@ -2715,7 +2715,7 @@
         if (hasSkins) {
           for (const c of SKIN_CODES.slice(0, 12)) {
             if (!savedSkins[c]) continue;
-            board.querySelectorAll(`.piece.${c},.promotion-piece.${c}`).forEach(el => {
+            board.querySelectorAll(`.piece.${c}`).forEach(el => {
               if (el.dataset.chSkin === savedSkins[c]) return;
               el.style.setProperty('background-image', `url("${savedSkins[c]}")`, 'important');
               el.style.setProperty('background-repeat', 'no-repeat', 'important');
@@ -2758,7 +2758,7 @@
     let css = '';
     for (const c of SKIN_CODES.slice(0, 12)) {
       if (!savedSkins[c]) continue;
-      const sel = `.piece.${c},.promotion-piece.${c}`;
+      const sel = `.piece.${c}`;
       if (skinMaskMode) {
         const orig = getOriginalPieceUrl(c);
         css += `${sel}{-webkit-mask-image:url("${orig}")!important;mask-image:url("${orig}")!important;-webkit-mask-size:contain!important;mask-size:contain!important;-webkit-mask-repeat:no-repeat!important;mask-repeat:no-repeat!important;-webkit-mask-position:center!important;mask-position:center!important;-webkit-mask-origin:content-box!important;mask-origin:content-box!important;background-image:url("${savedSkins[c]}")!important;background-size:cover!important;background-position:center!important;background-repeat:no-repeat!important;background-origin:content-box!important;background-clip:content-box!important;padding:0!important;animation:none!important;transform-origin:center center!important}\n`;
@@ -2767,7 +2767,7 @@
       }
     }
     if (savedSkins.board) {
-      css += `wc-chess-board,chess-board,.board,#board-vs-personalities,#board-single,#board-board,.fade-in-overlay{background-image:url("${savedSkins.board}")!important;background-size:cover!important;background-position:center!important}\n`;
+      css += `wc-chess-board,chess-board,.board,#board-vs-personalities,#board-single,#board-board{background-image:url("${savedSkins.board}")!important;background-size:cover!important;background-position:center!important}\n`;
     }
     skinStyleEl.textContent = css;
     const board = getBoard();
