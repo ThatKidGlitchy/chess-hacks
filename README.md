@@ -154,5 +154,4 @@ Each engine falls back to ASM.js when its WASM wrapper references features (like
 - Works on chess.com only (relies on chess.com DOM structure)
 - The script runs entirely client-side — no data sent anywhere
 - Use the loader bookmarklet to always get the latest version automatically
-- Both arrow types can be shown simultaneously (different SVG layers)
 - Thank you "Chess helper (chess.com)" on the Chrome web store for the UI theme!
