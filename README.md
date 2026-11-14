@@ -1,6 +1,6 @@
 # Chess Assist
 
-Stockfish chess engine hack for chess.com. Desktop and mobile versions included.
+Multi-engine chess.com assistant with auto-play, best-move arrows, cheat detection, custom skins + boards, and a 16-language UI. 10 engines ship with the script: Stockfish 19 / 18 / 17 / 16 / 11 / 10 / 8, Lozza 11, Garbochess, and p4wn. Desktop and mobile versions included.
 
 The chess-assist.js and other files are having some issues loading the engines correctly on iOS / Safari so please be patient a fix is coming soon. The extension currently works fine so you can use that while Im fixing the issue.
 
@@ -15,9 +15,10 @@ The chess-assist.js and other files are having some issues loading the engines c
 ## Features
 
 - **Multiple engines** — 10 engines at runtime: Stockfish 19/18/17/16/11/10/8, Lozza 11, Garbochess, and p4wn
-- **Interface in 16 languages** *(desktop)* — English, Español, Français, Deutsch, Português, Русский, Italiano, Polski, Nederlands, Türkçe, 简体中文, 日本語, 한국어, Українська, हिन्दी, العربية. First-run language picker; non-English dictionaries fetched on demand from CDN with 24hr localStorage cache so the file stays small. Translated labels that would be wider than the English equivalent scale their font-size down automatically so long words never break the panel layout
+- **Interface in 16 languages** *(desktop + mobile)* — English, Español, Français, Deutsch, Português, Русский, Italiano, Polski, Nederlands, Türkçe, 简体中文, 日本語, 한국어, Українська, हिन्दी, العربية. First-run language picker; non-English dictionaries fetched on demand from CDN with 24hr localStorage cache so the file stays small. Translated labels that would be wider than the English equivalent scale their font-size down automatically so long words never break the panel layout
 - **Streamer mode** *(desktop)* — shows the best move as a small floating text pill ("F1 TO C4") instead of an arrow on the board. Drag it anywhere, resize, position it behind your stream overlay or off your OBS capture area
-- **Premade piece sets** *(desktop)* — 188 open-source piece sets from Lichess, Rhosgfx, and Sharechess on a second Skins page. Click to apply all 12 pieces at once
+- **Premade piece sets** *(desktop + mobile)* — 300+ open-source piece sets from Lichess, Rhosgfx, Sharechess, and NikAgs on the Skins tab's second page. Click to apply all 12 pieces at once
+- **Board themes** *(desktop + mobile)* — 150+ open-source board themes from NikAgs and Sharechess on the Skins tab's third page. Click a tile and the whole board gets reskinned — solid-color boards, wood, grass, leather, cardboard, clouds, pixel art, and more
 - **UI opacity slider** *(desktop)* — fade the whole helper UI from 100% down to 5% so it never gets in the way of the board
 - **Hidden arrows darkness slider** *(desktop)* — tune how strong the shaded-square hint is
 - **Two-page Gameplay and Skins tabs** *(desktop)* — pager arrows at the top keep the panel short while fitting more features
@@ -28,7 +29,7 @@ The chess-assist.js and other files are having some issues loading the engines c
 - **Best move arrows** — green arrow showing the engine's top pick
 - **Hidden arrows** — subtle square shading instead of visible arrows for a less obvious look
 - **Opponent's best move** — red arrow predicting the opponent's best reply
-- **Win percent eval bar** — live vertical bar showing win probability from Stockfish evaluation
+- **Win percent eval bar** — live vertical bar showing win probability from the selected engine's evaluation
 - **Voice narration** — speaks the best move each turn through your headphones in chess-SAN style ("knight G one to F three", "bishop takes queen on F seven", "castle kingside", "pawn E seven to E eight, promote to queen, checkmate"). Nothing shows on screen, so anyone watching your screen can't spot it. Dark voice picker, speed / volume sliders, Say-once button to replay the last move, and a dedicated keybind on desktop
 - **Cheat detection** — real-time CPL, accuracy %, best move rate, and suspicion gauge
 - **Opponent / You toggle** — track the opponent's accuracy or your own with full move history
@@ -103,7 +104,7 @@ Always runs the latest version from GitHub:
 
 ## Mobile / iOS Safari (chess-assist-mobile.js)
 
-Same features as desktop (two-page Gameplay and Skins tabs, 188 premade piece sets, custom skin upload, live win percent eval bar, engine detection, voice narration, UI opacity, hidden-arrows darkness slider, Engine / Appearance / Session settings sections) except no keybind system, no hide-all toggle, and no streamer mode (mobile doesn't use keyboards and phones don't stream). Touch-optimized with larger targets (48px bubble, 28px switches, 22px slider thumbs), close button on panel, slightly longer timeouts for slower devices. Premade catalog falls back to XHR on iOS Safari so iPads with a keyboard load correctly.
+Same features as desktop (three-page Skins tab with 300+ premade piece sets and 150+ board themes, custom skin upload, live win percent eval bar, cheat detection, voice narration, UI opacity, hidden-arrows darkness slider, 16-language UI with first-run picker, Engine / Appearance / Session settings sections) except no keybind system, no hide-all toggle, and no streamer mode (mobile doesn't use keyboards and phones don't stream). Touch-optimized with larger targets (48px bubble, 28px switches, 22px slider thumbs), close button on panel, slightly longer timeouts for slower devices. Premade / boards catalog falls back to XHR on iOS Safari so iPads with a keyboard load correctly.
 
 ### Usage — Loader Bookmarklet
 
