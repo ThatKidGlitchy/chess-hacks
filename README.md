@@ -156,9 +156,3 @@ Each engine falls back to ASM.js when its WASM wrapper references features (like
 - Use the loader bookmarklet to always get the latest version automatically
 - Both arrow types can be shown simultaneously (different SVG layers)
 - Thank you "Chess helper (chess.com)" on the Chrome web store for the UI theme!
-
-## Contributors
-
-- [@ThatKidGlitchy](https://github.com/ThatKidGlitchy) — author / maintainer
-- [@progprogprogprog](https://github.com/progprogprogprog) — suggested the depth → ELO estimate and the hide-icon persistence (v1.4.2)
-
