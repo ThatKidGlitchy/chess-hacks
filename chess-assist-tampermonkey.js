@@ -1998,7 +1998,6 @@
   let oppAbort = null;
   let _lastSyncDetection = 0, _lastInActive = false, _lastGip = false;
   async function tick() {
-    if (uiHidden) return;
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice && !window.chessHelper.streamer) return;
     const _active = inActiveGame();
     if (_active && !_lastInActive && window.chessHelper.autoPlay) {
@@ -2225,7 +2224,6 @@
   let _mutDebounce = null;
   const obs = new MutationObserver(() => {
     if (drawing) return;
-    if (uiHidden) return;
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice && !window.chessHelper.streamer) return;
     if (_mutDebounce) return;
     _mutDebounce = setTimeout(() => {
