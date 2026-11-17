@@ -1044,8 +1044,10 @@
     });
     const bottom = document.querySelector('.clock-bottom, .clock-component-bottom');
     const top = document.querySelector('.clock-top, .clock-component-top');
-    let turn = 'w';
-    if (bottom && bottom.classList.contains('clock-player-turn')) turn = getMyColor() || 'w'; else if (top && top.classList.contains('clock-player-turn')) turn = getMyColor() === 'w' ? 'b' : 'w';
+    let turn = null;
+    if (bottom && bottom.classList.contains('clock-player-turn')) turn = getMyColor() || 'w';
+    else if (top && top.classList.contains('clock-player-turn')) turn = getMyColor() === 'w' ? 'b' : 'w';
+    if (!turn) return null;
     let castle = '';
     if (board[7][4] === 'K') {
       if (board[7][7] === 'R') castle += 'K';
@@ -1369,6 +1371,10 @@
       } catch {}
       pendingQuery = null;
     }
+    if (activeSearchResolve) {
+      try { activeSearchResolve([]); } catch {}
+      activeSearchResolve = null;
+    }
     fenCache.clear();
     lastEngineResponse = Date.now();
     if (oppAbort) {
@@ -1460,8 +1466,12 @@
       activeSearchTimeout = null;
     }
     if (pendingQuery) {
-      pendingQuery.resolve([]);
+      try { pendingQuery.resolve([]); } catch {}
       pendingQuery = null;
+    }
+    if (activeSearchResolve) {
+      try { activeSearchResolve([]); } catch {}
+      activeSearchResolve = null;
     }
     isWaitingForReady = false;
     sfWorker = null;
@@ -1516,16 +1526,26 @@
   let pendingQuery = null;
   let activeSearchHandler = null;
   let activeSearchTimeout = null;
+  let activeSearchResolve = null;
   function queryLocal(fen, depth, multiPV) {
     multiPV = multiPV || 1;
     const cached = getCachedEval(fen, multiPV);
-    if (cached) return Promise.resolve(cached);
+    if (cached) {
+      const _expSide = fen.split(' ')[1];
+      const _allValid = cached.every(r => {
+        if (!r?.move || r.move.length < 4) return false;
+        const _fp = pieceAtSquare(fen, r.move.slice(0, 2));
+        return !!_fp && ((_fp === _fp.toUpperCase()) === (_expSide === 'w'));
+      });
+      if (_allValid) return Promise.resolve(cached);
+      fenCache.delete(fen);
+    }
     return new Promise(resolve => {
       if (!sfWorker || !sfReady) {
         resolve([]);
         return;
       }
-      if (pendingQuery) pendingQuery.resolve([]);
+      if (pendingQuery) { try { pendingQuery.resolve([]); } catch {} }
       pendingQuery = {
         fen,
         depth,
@@ -1534,8 +1554,12 @@
       };
       if (isWaitingForReady) return;
       if (activeSearchHandler) {
-        sfWorker.removeEventListener('message', activeSearchHandler);
+        try { sfWorker.removeEventListener('message', activeSearchHandler); } catch {}
         activeSearchHandler = null;
+      }
+      if (activeSearchResolve) {
+        try { activeSearchResolve([]); } catch {}
+        activeSearchResolve = null;
       }
       if (activeSearchTimeout) {
         clearTimeout(activeSearchTimeout);
@@ -1550,13 +1574,14 @@
     if (!q || !sfWorker || !sfReady) return;
     const {fen, depth, multiPV, resolve} = q;
     if (activeSearchHandler) {
-      sfWorker.removeEventListener('message', activeSearchHandler);
+      try { sfWorker.removeEventListener('message', activeSearchHandler); } catch {}
       activeSearchHandler = null;
     }
     if (activeSearchTimeout) {
       clearTimeout(activeSearchTimeout);
       activeSearchTimeout = null;
     }
+    activeSearchResolve = resolve;
     const engine = ENGINES[currentEngine];
     const effectiveMPV = engine?.noMultiPV ? 1 : multiPV;
     if (sfCurrentMultiPV !== effectiveMPV && !engine?.noMultiPV) {
@@ -1566,7 +1591,7 @@
     const moves = {};
     let gotBestmove = false;
     let stopped = false;
-    const SOFT_TIMEOUT = engine?.noMultiPV ? 3e4 : 12e3;
+    const SOFT_TIMEOUT = engine?.noMultiPV ? 6e4 : Math.max(15000, depth * 1500);
     activeSearchTimeout = setTimeout(() => {
       if (gotBestmove || stopped) return;
       stopped = true;
@@ -1581,6 +1606,7 @@
         activeSearchHandler = null;
         activeSearchTimeout = null;
         const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+        activeSearchResolve = null;
         resolve(results);
       }, 500);
     }, SOFT_TIMEOUT);
@@ -1598,8 +1624,15 @@
           move: best.slice(0, 4),
           cp: null
         };
-        const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+        let results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+        const _expSide = fen.split(' ')[1];
+        results = results.filter(r => {
+          if (!r?.move || r.move.length < 4) return false;
+          const _fp = pieceAtSquare(fen, r.move.slice(0, 2));
+          return !!_fp && ((_fp === _fp.toUpperCase()) === (_expSide === 'w'));
+        });
         if (results.length && !stopped) setCachedEval(fen, results, effectiveMPV);
+        activeSearchResolve = null;
         resolve(results);
         return;
       }
@@ -1608,20 +1641,25 @@
         const pvIdx = parseInt(pvMatchWithIdx[1]);
         const mv = pvMatchWithIdx[2];
         if (mv.length >= 4) {
-          const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
-          let cp = null, mate = null;
-          if (scoreMatch) {
-            const parts = scoreMatch[1].split(/\s+/);
-            if (parts[0] === 'mate') {
-              mate = parseInt(parts[1]);
-              cp = mate > 0 ? 99999 : -99999;
-            } else cp = parseInt(parts[1]);
+          const _expSide = fen.split(' ')[1];
+          const _fp = pieceAtSquare(fen, mv.slice(0, 2));
+          const _validSide = !!_fp && ((_fp === _fp.toUpperCase()) === (_expSide === 'w'));
+          if (_validSide) {
+            const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
+            let cp = null, mate = null;
+            if (scoreMatch) {
+              const parts = scoreMatch[1].split(/\s+/);
+              if (parts[0] === 'mate') {
+                mate = parseInt(parts[1]);
+                cp = mate > 0 ? 99999 : -99999;
+              } else cp = parseInt(parts[1]);
+            }
+            moves[pvIdx] = {
+              move: mv.slice(0, 4),
+              cp,
+              mate
+            };
           }
-          moves[pvIdx] = {
-            move: mv.slice(0, 4),
-            cp,
-            mate
-          };
         }
       } else if (engine?.noMultiPV) {
         const pvOnly = line.match(/\bpv\s+(\S+)/);
@@ -1677,13 +1715,6 @@
     const parts = fen.split(' ');
     parts[1] = parts[1] === 'w' ? 'b' : 'w';
     return parts.join(' ');
-  }
-  async function queryOpponentBest(fen) {
-    if (!sfReady) await initEngine();
-    const flipped = flipFEN(fen);
-    const candidates = await queryLocal(flipped, ENGINE_DEPTH, 1);
-    if (!candidates.length) return null;
-    return candidates[0].move;
   }
   function recordMove(fen, move) {
     const key = boardKey(fen);
@@ -1858,19 +1889,12 @@
     const flipped = isFlipped();
     const s = squareToPct(from, flipped);
     const e = squareToPct(to, flipped);
-    const dx = e.x - s.x, dy = e.y - s.y;
-    const len = Math.hypot(dx, dy);
-    if (len < .5) {
-      drawing = false;
-      return;
-    }
-    const ux = dx / len, uy = dy / len;
-    const headLen = 4.5, headW = 3.5, bodyW = 1.4;
-    const tipX = e.x - ux * 1, tipY = e.y - uy * 1;
-    const baseX = s.x + ux * 1, baseY = s.y + uy * 1;
-    const neckX = tipX - ux * headLen, neckY = tipY - uy * headLen;
-    const nx = -uy, ny = ux;
-    const pts = [ [ baseX + nx * bodyW, baseY + ny * bodyW ], [ neckX + nx * bodyW, neckY + ny * bodyW ], [ neckX + nx * headW, neckY + ny * headW ], [ tipX, tipY ], [ neckX - nx * headW, neckY - ny * headW ], [ neckX - nx * bodyW, neckY - ny * bodyW ], [ baseX - nx * bodyW, baseY - ny * bodyW ] ];
+    const df = Math.abs(from.charCodeAt(0) - to.charCodeAt(0));
+    const dr = Math.abs(parseInt(from[1], 10) - parseInt(to[1], 10));
+    const isKnight = (df === 1 && dr === 2) || (df === 2 && dr === 1);
+    const bodyW = 2.2;
+    const headW = 5;
+    const headLen = 5;
     let svg = b.querySelector('.' + cssClass);
     if (!svg) {
       svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -1882,11 +1906,43 @@
     } else {
       svg.innerHTML = '';
     }
-    const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
-    poly.setAttribute('points', pts.map(p => p[0].toFixed(2) + ',' + p[1].toFixed(2)).join(' '));
-    poly.setAttribute('fill', color);
-    poly.setAttribute('opacity', opacity);
-    svg.appendChild(poly);
+    const markerId = cssClass + '-head-' + Math.random().toString(36).slice(2, 8);
+    const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+    const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+    marker.setAttribute('id', markerId);
+    marker.setAttribute('viewBox', '0 0 10 10');
+    marker.setAttribute('refX', '7');
+    marker.setAttribute('refY', '5');
+    marker.setAttribute('markerUnits', 'userSpaceOnUse');
+    marker.setAttribute('markerWidth', headW);
+    marker.setAttribute('markerHeight', headW);
+    marker.setAttribute('orient', 'auto');
+    const head = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    head.setAttribute('d', 'M0,0 L10,5 L0,10 Z');
+    head.setAttribute('fill', color);
+    marker.appendChild(head);
+    defs.appendChild(marker);
+    svg.appendChild(defs);
+    let d;
+    if (isKnight) {
+      if (dr === 2) {
+        d = `M ${s.x} ${s.y} L ${s.x} ${e.y} L ${e.x} ${e.y}`;
+      } else {
+        d = `M ${s.x} ${s.y} L ${e.x} ${s.y} L ${e.x} ${e.y}`;
+      }
+    } else {
+      d = `M ${s.x} ${s.y} L ${e.x} ${e.y}`;
+    }
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('stroke', color);
+    path.setAttribute('stroke-width', bodyW);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('opacity', opacity);
+    path.setAttribute('stroke-linecap', 'butt');
+    path.setAttribute('stroke-linejoin', 'miter');
+    path.setAttribute('marker-end', `url(#${markerId})`);
+    svg.appendChild(path);
     drawing = false;
   }
   function drawNativeArrow(move) {
@@ -2053,7 +2109,11 @@
           const candidates = await queryLocal(fen, ENGINE_DEPTH, 1);
           if (abortCtrl.aborted) return;
           if (getFEN() !== fen) return;
-          if (isMyTurn() === true) return;
+          if (isMyTurn() !== false) return;
+          {
+            const _liveFen = getFEN();
+            if (!_liveFen || _liveFen.split(' ')[1] === getMyColor()) return;
+          }
           const om = candidates.length ? candidates[0].move : null;
           if (candidates.length && candidates[0].cp !== null) {
             if (detection.lastMyEvalCp !== null && detection.lastMyEvalFen && detection.lastMyEvalFen !== fen) {
@@ -2079,7 +2139,12 @@
           }
           lastOppFen = fen;
           lastOppMove = om;
-          if (window.chessHelper.showOpponent && om) drawOpponentArrow(om); else clearOpponentArrow();
+          let _oppOk = false;
+          if (om) {
+            const _fromPc = pieceAtSquare(fen, om.slice(0, 2));
+            _oppOk = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) !== (getMyColor() === 'w'));
+          }
+          if (window.chessHelper.showOpponent && _oppOk) drawOpponentArrow(om); else clearOpponentArrow();
         } catch (e) {
           console.warn('[Chess Assist] tick error (opp):', e);
         } finally {
@@ -2112,18 +2177,42 @@
     processingMy = true;
     try {
       thinkingEl.classList.add('active');
+      console.log('[CH-MY] start fen=', fen.slice(0, 30), 'depth=', ENGINE_DEPTH);
       const result = await fetchRemote(fen);
+      console.log('[CH-MY] fetchRemote returned:', result ? result.move : 'null', 'cp=', result?.cp);
       if (getFEN() !== fen) {
+        console.log('[CH-MY] BAIL: fen changed. was=', fen.slice(0,30), 'now=', (getFEN()||'null').slice(0,30));
         thinkingEl.classList.remove('active');
         return;
       }
-      if (isMyTurn() === false) {
+      if (isMyTurn() !== true) {
+        console.log('[CH-MY] BAIL: isMyTurn=', isMyTurn());
         thinkingEl.classList.remove('active');
         return;
+      }
+      {
+        const _liveFen = getFEN();
+        if (!_liveFen || _liveFen.split(' ')[1] !== getMyColor()) {
+          console.log('[CH-MY] BAIL: liveFen check. liveFen=', _liveFen?.slice(0,30), 'myColor=', getMyColor());
+          thinkingEl.classList.remove('active');
+          return;
+        }
       }
       thinkingEl.classList.remove('active');
-      if (!result) return;
+      if (!result) {
+        console.log('[CH-MY] BAIL: no result from engine');
+        return;
+      }
       const mv = result.move;
+      {
+        const _fromPc = pieceAtSquare(fen, mv.slice(0, 2));
+        const _isOurs = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) === (getMyColor() === 'w'));
+        if (!_isOurs) {
+          console.log('[CH-MY] BAIL: piece-ownership check. mv=', mv, 'fromPc=', _fromPc, 'myColor=', getMyColor());
+          return;
+        }
+      }
+      console.log('[CH-MY] drawing arrow for', mv);
       updateEval(result.cp, getMyColor());
       if (result.cp != null && detection.lastOppEvalCp !== null && detection.lastOppEvalFen && detection.lastOppEvalFen !== fen) {
         const rawCpl = detection.lastOppEvalCp + result.cp;
@@ -2154,7 +2243,7 @@
       const _curFen = getFEN();
       const _myColor = getMyColor();
       const _fromPiece = pieceAtSquare(fen, mv.slice(0, 2));
-      const _pieceIsMine = _fromPiece && _fromPiece === _fromPiece.toUpperCase() === (_myColor === 'w');
+      const _pieceIsMine = !!_fromPiece && ((_fromPiece === _fromPiece.toUpperCase()) === (_myColor === 'w'));
       const _stillMyTurn = _curFen && _curFen.split(' ')[1] === _myColor && isMyTurn() === true;
       const _boardUnchanged = _curFen && _curFen.split(' ')[0] === fen.split(' ')[0];
       const _mvIsOurs = _pieceIsMine && _stillMyTurn && _boardUnchanged;
@@ -2176,18 +2265,27 @@
           await new Promise(r => setTimeout(r, delay));
         }
         if (!window.chessHelper.autoPlay) return;
+        {
+          if (!gameInProgress()) return;
+          const _nowFen = getFEN();
+          if (!_nowFen || _nowFen !== fen) return;
+          if (_nowFen.split(' ')[1] !== getMyColor()) return;
+          if (isMyTurn() !== true) return;
+          const _fromPc = pieceAtSquare(fen, mv.slice(0, 2));
+          const _isOurs = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) === (getMyColor() === 'w'));
+          if (!_isOurs) return;
+        }
         recordMove(fen, mv);
         await makeMove(mv);
         const fenAfter = getFEN();
         if (fenAfter !== fen) {
-
-
-
-
           const _afterTurn = fenAfter && fenAfter.split(' ')[1];
           if (_afterTurn && _afterTurn !== getMyColor()) {
             lastMovedFen = fenAfter;
             waitingForOpponent = true;
+            clearArrows();
+            clearShading();
+            clearOpponentArrow();
           } else {
             lastMovedFen = '';
             waitingForOpponent = false;
@@ -2209,6 +2307,16 @@
       thinkingEl.classList.remove('active');
     }
   }
+  window.chessHelper._debug = () => ({
+    processingMy, processingOpp, isWaitingForReady,
+    activeHandler: !!activeSearchHandler,
+    activeResolve: !!activeSearchResolve,
+    pendingQuery: pendingQuery ? pendingQuery.fen.slice(0, 30) : null,
+    sfReady, drawing,
+    lastFen: lastFen ? lastFen.slice(0, 30) : '',
+    lastMovedFen: lastMovedFen ? lastMovedFen.slice(0, 30) : '',
+    waitingForOpp: waitingForOpponent,
+  });
   let _mutDebounce = null;
   const obs = new MutationObserver(() => {
     if (drawing) return;
@@ -3395,13 +3503,20 @@
       return;
     }
     try {
-      if (!isMyTurn()) {
+      const fenTurn = fen.split(' ')[1];
+      const myColor = getMyColor();
+      const isMine = (fenTurn === myColor);
+      if (!isMine) {
         const candidates = await queryLocal(fen, ENGINE_DEPTH, 1);
         const om = candidates.length ? candidates[0].move : null;
         thinkingEl.classList.remove('active');
         if (om) {
-          drawOpponentArrow(om);
-          btn.textContent = `Opp: ${om.toUpperCase()}`;
+          const _fromPc = pieceAtSquare(fen, om.slice(0, 2));
+          const _oppOk = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) !== (myColor === 'w'));
+          if (_oppOk) {
+            drawOpponentArrow(om);
+            btn.textContent = `Opp: ${om.toUpperCase()}`;
+          } else btn.textContent = 'No result';
         } else btn.textContent = 'No result';
         setTimeout(() => btn.textContent = 'Analyze once', 2500);
         return;
@@ -3409,14 +3524,20 @@
       const result = await fetchRemote(fen);
       thinkingEl.classList.remove('active');
       if (result) {
-        updateEval(result.cp, getMyColor());
-        if (window.chessHelper.hiddenArrow) {
-          drawShading(result.move);
-          clearArrows();
+        const _fromPc = pieceAtSquare(fen, result.move.slice(0, 2));
+        const _isOurs = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) === (myColor === 'w'));
+        if (!_isOurs) {
+          btn.textContent = 'No result';
         } else {
-          drawNativeArrow(result.move);
+          updateEval(result.cp, myColor);
+          if (window.chessHelper.hiddenArrow) {
+            drawShading(result.move);
+            clearArrows();
+          } else {
+            drawNativeArrow(result.move);
+          }
+          btn.textContent = `Best: ${result.move.toUpperCase()}`;
         }
-        btn.textContent = `Best: ${result.move.toUpperCase()}`;
       } else btn.textContent = 'No result';
       setTimeout(() => btn.textContent = 'Analyze once', 2500);
     } catch (e) {
