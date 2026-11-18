@@ -801,6 +801,33 @@
       } catch (e) { rej(e); }
     });
   }
+  // Try the same resource across multiple CDN mirrors so a single blocked/slow CDN
+  // (common for Safari users with content blockers, Private Relay, or ITP quirks)
+  // doesn't hang the engine load. Chain: jsDelivr primary → Fastly edge → raw.github.
+  async function fetchEngineWithMirrors(url, onBytes) {
+    const mirrors = [url];
+    if (/cdn\.jsdelivr\.net/.test(url)) {
+      mirrors.push(url.replace('cdn.jsdelivr.net', 'fastly.jsdelivr.net'));
+    }
+    const rawMatch = url.match(/^https:\/\/(?:cdn|fastly)\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+)$/);
+    if (rawMatch) {
+      const [, owner, repo, ref, path] = rawMatch;
+      mirrors.push(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`);
+    }
+    let lastErr;
+    for (let i = 0; i < mirrors.length; i++) {
+      const mirrorUrl = mirrors[i];
+      try {
+        if (i > 0) console.warn('[Chess Assist] retrying from mirror ' + (i + 1) + '/' + mirrors.length + ':', mirrorUrl);
+        return await fetchWithProgress(mirrorUrl, onBytes);
+      } catch (e) {
+        lastErr = e;
+        console.warn('[Chess Assist] mirror ' + (i + 1) + ' failed:', mirrorUrl, (e && e.message) || e);
+      }
+    }
+    throw lastErr || new Error('all mirrors failed for ' + url);
+  }
+
   async function fetchWithProgress(url, onBytes) {
     const TIMEOUT_MS = 60000;
     let ctrl = null, timer = null;
@@ -858,21 +885,21 @@
           }
         };
         const [jsBuf, wasmBuf] = await Promise.all([
-          fetchWithProgress(engine.jsUrl, (r, t) => { jsBytes = r; jsTotal = t; updateProgress(); }),
-          fetchWithProgress(engine.wasmUrl, (r, t) => { wasmBytes = r; wasmTotal = t; updateProgress(); })
+          fetchEngineWithMirrors(engine.jsUrl, (r, t) => { jsBytes = r; jsTotal = t; updateProgress(); }),
+          fetchEngineWithMirrors(engine.wasmUrl, (r, t) => { wasmBytes = r; wasmTotal = t; updateProgress(); })
         ]);
         const jsCode = new TextDecoder().decode(jsBuf);
         if (_overlay) showLoadingOverlay(null, 100);
-        const boot = 'if(typeof SharedArrayBuffer==="undefined"){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+err);});}catch(err){self.postMessage("info string Stockfish boot error: "+err);}}}};';
+        const boot = 'self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev.error||ev));}catch(_){}});self.addEventListener("unhandledrejection",function(ev){try{self.postMessage("info string worker rejection: "+((ev.reason&&ev.reason.message)||ev.reason||ev));}catch(_){}});self.postMessage("info string worker started");self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
         sfWorker = new Worker(URL.createObjectURL(new Blob([boot], { type: 'application/javascript' })));
         sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [wasmBuf]);
       } else {
-        const buf = await fetchWithProgress(engine.url, (r, t) => {
+        const buf = await fetchEngineWithMirrors(engine.url, (r, t) => {
           if (_overlay && t > 0) showLoadingOverlay(null, (r / t) * 100);
         });
         const code = new TextDecoder().decode(buf);
         if (_overlay) showLoadingOverlay(null, 100);
-        const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
+        const jsPrefix = 'self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev.error||ev));}catch(_){}});self.addEventListener("unhandledrejection",function(ev){try{self.postMessage("info string worker rejection: "+((ev.reason&&ev.reason.message)||ev.reason||ev));}catch(_){}});self.postMessage("info string worker started");\n';
         sfWorker = new Worker(URL.createObjectURL(new Blob([jsPrefix + code], { type: 'application/javascript' })));
       }
       await uciCommand('uci', 'uciok');
@@ -891,9 +918,9 @@
       sfWorker = null;
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
-          const asmBuf = await fetchWithProgress(engine.asmUrl, () => {});
+          const asmBuf = await fetchEngineWithMirrors(engine.asmUrl, () => {});
           const code = new TextDecoder().decode(asmBuf);
-          const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
+          const jsPrefix = 'self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev.error||ev));}catch(_){}});self.addEventListener("unhandledrejection",function(ev){try{self.postMessage("info string worker rejection: "+((ev.reason&&ev.reason.message)||ev.reason||ev));}catch(_){}});self.postMessage("info string worker started");\n';
           sfWorker = new Worker(URL.createObjectURL(new Blob([jsPrefix + code], { type: 'application/javascript' })));
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
@@ -1008,7 +1035,7 @@
 
   function uciCommand(cmd, waitFor) {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('UCI timeout')), 15000);
+      const timeout = setTimeout(() => reject(new Error('UCI timeout')), 60000);
       const handler = (e) => {
         if (typeof e.data === 'string' && e.data.startsWith(waitFor)) {
           clearTimeout(timeout);
