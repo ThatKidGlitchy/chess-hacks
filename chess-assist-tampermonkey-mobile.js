@@ -728,9 +728,10 @@
     const rows = board.map(r => { let s = '', e = 0; for (const c of r) { if (!c) e++; else { if (e) s += e; e = 0; s += c; } } return s + (e || ''); });
     const bottom = document.querySelector('.clock-bottom, .clock-component-bottom');
     const top = document.querySelector('.clock-top, .clock-component-top');
-    let turn = 'w';
+    let turn = null;
     if (bottom && bottom.classList.contains('clock-player-turn')) turn = getMyColor() || 'w';
     else if (top && top.classList.contains('clock-player-turn')) turn = (getMyColor() === 'w' ? 'b' : 'w');
+    if (!turn) return null;
     return rows.join('/') + ` ${turn} - - 0 1`;
   }
 
@@ -993,7 +994,8 @@
     if (activeSearchHandler && sfWorker) { try { sfWorker.removeEventListener('message', activeSearchHandler); } catch {} }
     activeSearchHandler = null;
     if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
-    if (pendingQuery) { pendingQuery.resolve([]); pendingQuery = null; }
+    if (pendingQuery) { try { pendingQuery.resolve([]); } catch {} pendingQuery = null; }
+    if (activeSearchResolve) { try { activeSearchResolve([]); } catch {} activeSearchResolve = null; }
     isWaitingForReady = false;
     sfWorker = null;
     sfReady = false;
@@ -1035,20 +1037,31 @@
   let pendingQuery = null;
   let activeSearchHandler = null;
   let activeSearchTimeout = null;
+  let activeSearchResolve = null;
 
   function queryLocal(fen, depth, multiPV) {
     multiPV = multiPV || 1;
     const cached = getCachedEval(fen, multiPV);
-    if (cached) return Promise.resolve(cached);
+    if (cached) {
+      const _expSide = fen.split(' ')[1];
+      const _allValid = cached.every(r => {
+        if (!r?.move || r.move.length < 4) return false;
+        const _fp = pieceAtSquare(fen, r.move.slice(0, 2));
+        return !!_fp && ((_fp === _fp.toUpperCase()) === (_expSide === 'w'));
+      });
+      if (_allValid) return Promise.resolve(cached);
+      fenCache.delete(fen);
+    }
     return new Promise((resolve) => {
       if (!sfWorker || !sfReady) { resolve([]); return; }
-      if (pendingQuery) pendingQuery.resolve([]);
+      if (pendingQuery) { try { pendingQuery.resolve([]); } catch {} }
       pendingQuery = { fen, depth, multiPV, resolve };
       if (isWaitingForReady) return;
       if (activeSearchHandler) {
-        sfWorker.removeEventListener('message', activeSearchHandler);
+        try { sfWorker.removeEventListener('message', activeSearchHandler); } catch {}
         activeSearchHandler = null;
       }
+      if (activeSearchResolve) { try { activeSearchResolve([]); } catch {} activeSearchResolve = null; }
       if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
       uciSend('stop');
       uciSend('isready');
@@ -1060,25 +1073,28 @@
     if (!q || !sfWorker || !sfReady) return;
     const { fen, depth, multiPV, resolve } = q;
     if (activeSearchHandler) {
-      sfWorker.removeEventListener('message', activeSearchHandler);
+      try { sfWorker.removeEventListener('message', activeSearchHandler); } catch {}
       activeSearchHandler = null;
     }
     if (activeSearchTimeout) { clearTimeout(activeSearchTimeout); activeSearchTimeout = null; }
+    activeSearchResolve = resolve;
     if (sfCurrentMultiPV !== multiPV) {
       sfCurrentMultiPV = multiPV;
       uciSend('setoption name MultiPV value ' + multiPV);
     }
     const moves = {};
     let gotBestmove = false;
+    const SOFT_TIMEOUT = Math.max(15000, depth * 1500);
     activeSearchTimeout = setTimeout(() => {
       if (gotBestmove) return;
-      sfWorker.removeEventListener('message', handler);
+      try { sfWorker.removeEventListener('message', handler); } catch {}
       activeSearchHandler = null;
       activeSearchTimeout = null;
       const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
       if (results.length) setCachedEval(fen, results, multiPV);
+      activeSearchResolve = null;
       resolve(results);
-    }, 4000);
+    }, SOFT_TIMEOUT);
     const handler = (e) => {
       const line = typeof e.data === 'string' ? e.data : '';
       lastEngineResponse = Date.now();
@@ -1086,12 +1102,19 @@
         gotBestmove = true;
         clearTimeout(activeSearchTimeout);
         activeSearchTimeout = null;
-        sfWorker.removeEventListener('message', handler);
+        try { sfWorker.removeEventListener('message', handler); } catch {}
         activeSearchHandler = null;
         const best = line.split(/\s+/)[1];
         if (best && best.length >= 4 && !moves[1]) moves[1] = { move: best.slice(0, 4), cp: null };
-        const results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+        let results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
+        const _expSide = fen.split(' ')[1];
+        results = results.filter(r => {
+          if (!r?.move || r.move.length < 4) return false;
+          const _fp = pieceAtSquare(fen, r.move.slice(0, 2));
+          return !!_fp && ((_fp === _fp.toUpperCase()) === (_expSide === 'w'));
+        });
         if (results.length) setCachedEval(fen, results, multiPV);
+        activeSearchResolve = null;
         resolve(results);
         return;
       }
@@ -1100,14 +1123,19 @@
         const pvIdx = parseInt(pvMatch[1]);
         const mv = pvMatch[2];
         if (mv.length >= 4) {
-          const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
-          let cp = null, mate = null;
-          if (scoreMatch) {
-            const parts = scoreMatch[1].split(/\s+/);
-            if (parts[0] === 'mate') { mate = parseInt(parts[1]); cp = mate > 0 ? 99999 : -99999; }
-            else cp = parseInt(parts[1]);
+          const _expSide = fen.split(' ')[1];
+          const _fp = pieceAtSquare(fen, mv.slice(0, 2));
+          const _validSide = !!_fp && ((_fp === _fp.toUpperCase()) === (_expSide === 'w'));
+          if (_validSide) {
+            const scoreMatch = line.match(/score\s+(cp\s+[-\d]+|mate\s+[-\d]+)/);
+            let cp = null, mate = null;
+            if (scoreMatch) {
+              const parts = scoreMatch[1].split(/\s+/);
+              if (parts[0] === 'mate') { mate = parseInt(parts[1]); cp = mate > 0 ? 99999 : -99999; }
+              else cp = parseInt(parts[1]);
+            }
+            moves[pvIdx] = { move: mv.slice(0, 4), cp, mate };
           }
-          moves[pvIdx] = { move: mv.slice(0, 4), cp, mate };
         }
       }
     };
