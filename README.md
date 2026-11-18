@@ -2,8 +2,6 @@
 
 Multi-engine chess.com assistant with auto-play, best-move arrows, cheat detection, custom skins + boards, and a 16-language UI. 10 engines ship with the script: Stockfish 19 / 18 / 17 / 16 / 11 / 10 / 8, Lozza 11, Garbochess, and p4wn. Desktop and mobile versions included.
 
-The chess-assist.js and other files are having some issues loading the engines correctly on iOS / Safari so please be patient a fix is coming soon. The extension currently works fine so you can use that while Im fixing the issue.
-
 **Current version: v1.4.4**
 
 ![Chess Assist — Gameplay](.github/screenshot-gameplay.png)
