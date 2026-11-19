@@ -1869,10 +1869,6 @@
   let _activeOppMove = null;
   function clearArrows() {
     drawing = true;
-    const b = getBoard();
-    try {
-      if (b?.game?.markings?.removeAll) b.game.markings.removeAll();
-    } catch {}
     myArrowIds = [];
     _activeMyMove = null;
     document.querySelectorAll('.ch-arrow-svg').forEach(e => e.remove());
@@ -1981,19 +1977,6 @@
     _activeMyMove = move;
     const b = getBoard();
     if (!b || !move) return;
-    const from = move.slice(0, 2), to = move.slice(2, 4);
-    try {
-      if (b.game?.markings?.addMany) {
-        drawing = true;
-        const ret = b.game.markings.addMany([ {
-          data: { from, to, color: '#96bc4b', opacity: .8 },
-          type: 'arrow'
-        } ]);
-        if (Array.isArray(ret)) myArrowIds = ret.filter(x => x != null);
-        drawing = false;
-        return;
-      }
-    } catch { drawing = false; }
     drawArrowSVG(b, move, '#96bc4b', '0.8', 'ch-arrow-svg', 1e3);
   }
   function drawNativeArrow(move) {
