@@ -1281,12 +1281,20 @@
     }
   }
 
+  let myArrowIds = [];
+  let _activeMyMove = null;
+  let _activeOppMove = null;
   function clearArrows() {
     drawing = true;
     const b = getBoard();
+    const keepOpp = _activeOppMove;
     try { if (b?.game?.markings?.removeAll) b.game.markings.removeAll(); } catch {}
+    oppArrowIds = [];
+    myArrowIds = [];
+    _activeMyMove = null;
     document.querySelectorAll('.ch-arrow-svg').forEach(e => e.remove());
     drawing = false;
+    if (keepOpp && window.chessHelper.showOpponent) _drawOppArrowRaw(keepOpp);
   }
 
   function clearShading() {
@@ -1363,37 +1371,42 @@
     drawing = false;
   }
 
-  function drawNativeArrow(move) {
-    clearArrows();
+  function _drawMyArrowRaw(move) {
+    _activeMyMove = move;
     const b = getBoard(); if (!b || !move) return;
     const from = move.slice(0, 2), to = move.slice(2, 4);
     try {
       if (b.game?.markings?.addMany) {
         drawing = true;
-        b.game.markings.addMany([{ data: { from, to, color: '#96bc4b', opacity: 0.8 }, type: 'arrow' }]);
+        const ret = b.game.markings.addMany([{ data: { from, to, color: '#96bc4b', opacity: 0.8 }, type: 'arrow' }]);
+        if (Array.isArray(ret)) myArrowIds = ret.filter(x => x != null);
         drawing = false;
         return;
       }
     } catch { drawing = false; }
     drawArrowSVG(b, move, '#96bc4b', '0.8', 'ch-arrow-svg', 1000);
   }
+  function drawNativeArrow(move) {
+    clearArrows();
+    _drawMyArrowRaw(move);
+  }
 
   let oppArrowIds = [];
   function clearOpponentArrow() {
     drawing = true;
-    document.querySelectorAll('.ch-opponent-svg').forEach(e => e.remove());
     const b = getBoard();
-    try {
-      if (b?.game?.markings?.remove && oppArrowIds.length) {
-        for (const id of oppArrowIds) { try { b.game.markings.remove(id); } catch {} }
-      }
-    } catch {}
+    const keepMy = _activeMyMove;
+    try { if (b?.game?.markings?.removeAll) b.game.markings.removeAll(); } catch {}
+    document.querySelectorAll('.ch-opponent-svg').forEach(e => e.remove());
     oppArrowIds = [];
+    myArrowIds = [];
+    _activeOppMove = null;
     drawing = false;
+    if (keepMy && (window.chessHelper.showArrow || window.chessHelper.hiddenArrow)) _drawMyArrowRaw(keepMy);
   }
 
-  function drawOpponentArrow(move) {
-    clearOpponentArrow();
+  function _drawOppArrowRaw(move) {
+    _activeOppMove = move;
     const b = getBoard(); if (!b || !move) return;
     const from = move.slice(0, 2), to = move.slice(2, 4);
     try {
@@ -1406,6 +1419,10 @@
       }
     } catch { drawing = false; }
     drawArrowSVG(b, move, '#e04040', '0.8', 'ch-opponent-svg', 1002);
+  }
+  function drawOpponentArrow(move) {
+    clearOpponentArrow();
+    _drawOppArrowRaw(move);
   }
 
   function cpToWinPct(cp) {
