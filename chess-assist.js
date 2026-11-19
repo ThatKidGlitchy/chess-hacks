@@ -2052,6 +2052,16 @@
     _lastGip = _gip;
     const b = getBoard();
     if (!b) return;
+    // Watchdog: chess.com's autoplay-cleanup strips SVG children from the board
+    // ~1s after makeMove. Redraw any arrow that should be visible but isn't.
+    if (!drawing) {
+      if (_activeOppMove && window.chessHelper.showOpponent && !b.querySelector('.ch-opponent-svg')) {
+        _drawOppArrowRaw(_activeOppMove);
+      }
+      if (_activeMyMove && window.chessHelper.showArrow && !b.querySelector('.ch-arrow-svg')) {
+        _drawMyArrowRaw(_activeMyMove);
+      }
+    }
     const _fenCheck = (() => {
       try {
         return b.game?.getFEN?.();
