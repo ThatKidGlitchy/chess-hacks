@@ -1346,11 +1346,12 @@
         _dbgAttach();
         console.log(_dbgTag, 'js worker constructed. codeBytes=', code.length);
       }
-      await uciCommand('uci', 'uciok');
+      // Primary attempt — fast timeout so we can fall back to older wasm/asm quickly on Safari.
+      await uciCommand('uci', 'uciok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
       uciSend('setoption name Hash value ' + (engine.hash || 64));
       sfCurrentMultiPV = 1;
       if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
-      await uciCommand('isready', 'readyok');
+      await uciCommand('isready', 'readyok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
       sfReady = true;
       sfWorker.onerror = handleWorkerCrash;
       hideLoadingOverlay();
@@ -1376,11 +1377,11 @@
           _dbgAttach();
           console.log(_dbgTag, 'wasm-fallback worker constructed. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
           sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [ wasmBuf ]);
-          await uciCommand('uci', 'uciok');
+          await uciCommand('uci', 'uciok', 20000);
           uciSend('setoption name Hash value ' + (engine.hash || 64));
           sfCurrentMultiPV = 1;
           if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
-          await uciCommand('isready', 'readyok');
+          await uciCommand('isready', 'readyok', 20000);
           sfReady = true;
           sfWorker.onerror = handleWorkerCrash;
           lastEngineResponse = Date.now();
@@ -1583,7 +1584,7 @@
   function uciSend(cmd) {
     if (sfWorker) sfWorker.postMessage(cmd);
   }
-  function uciCommand(cmd, waitFor) {
+  function uciCommand(cmd, waitFor, timeoutMs) {
     return new Promise((resolve, reject) => {
       const worker = sfWorker;
       if (!worker) {
@@ -1595,7 +1596,7 @@
           worker.removeEventListener('message', handler);
         } catch {}
         reject(new Error('UCI timeout waiting for ' + waitFor));
-      }, 6e4);
+      }, timeoutMs || 6e4);
       const handler = e => {
         lastEngineResponse = Date.now();
         if (typeof e.data === 'string' && e.data.startsWith(waitFor)) {
