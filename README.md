@@ -74,7 +74,7 @@ Extension ID: `lndpjblmeoajilkhmdppoalcfdpoiaic`
 
 The extension version runs multi-threaded Stockfish via a Chrome offscreen document, so it's noticeably faster than the Tampermonkey / bookmarklet single-threaded builds. Auto-updates through the Web Store.
 
-If you'd rather load it unpacked, download [`chess-assist-extension.zip`](https://github.com/ThatKidGlitchy/chess-hacks/releases/latest/download/chess-assist-extension.zip) from [releases](https://github.com/ThatKidGlitchy/chess-hacks/releases) and load it at `chrome://extensions` with Developer mode on.
+If you'd rather load it unpacked, download [`chess-assist-extension.zip`](https://github.com/ThatKidGlitchy/chess-hacks/releases/latest/download/chess-assist-extension.zip) from [releases](https://github.com/ThatKidGlitchy/chess-hacks/releases) and load it with Developer mode on at `chrome://extensions` (Chrome / Brave / Opera / Arc) or `edge://extensions` (Microsoft Edge).
 
 ### 3. Bookmarklet
 
