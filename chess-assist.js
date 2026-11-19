@@ -1278,6 +1278,19 @@
   async function _doInitEngine() {
     if (sfWorker) return;
     const engine = ENGINES[currentEngine] || ENGINES['sf19'];
+    const _dbgTag = '[CH-WORKER-DBG]';
+    const _dbgAttach = () => {
+      if (!sfWorker) return;
+      sfWorker.addEventListener('message', ev => {
+        try { console.log(_dbgTag, typeof ev.data === 'string' ? ev.data.slice(0, 200) : ev.data); } catch (_) {}
+      });
+      sfWorker.addEventListener('error', ev => {
+        try { console.warn(_dbgTag, 'worker.onerror:', ev.message || ev.error || ev, 'filename:', ev.filename, 'line:', ev.lineno); } catch (_) {}
+      });
+      sfWorker.addEventListener('messageerror', ev => {
+        try { console.warn(_dbgTag, 'messageerror:', ev); } catch (_) {}
+      });
+    };
     try {
       if (engine.kind === 'wasm') {
         let jsBytes = 0, jsTotal = 0, wasmBytes = 0, wasmTotal = 0;
@@ -1303,6 +1316,8 @@
         sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], {
           type: 'application/javascript'
         })));
+        _dbgAttach();
+        console.log(_dbgTag, 'wasm worker constructed, posting init. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
         sfWorker.postMessage({
           type: 'init',
           wasm: wasmBuf,
@@ -1318,6 +1333,8 @@
         sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
           type: 'application/javascript'
         })));
+        _dbgAttach();
+        console.log(_dbgTag, 'js worker constructed. codeBytes=', code.length);
       }
       await uciCommand('uci', 'uciok');
       uciSend('setoption name Hash value ' + (engine.hash || 64));
@@ -1343,6 +1360,8 @@
           sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
             type: 'application/javascript'
           })));
+          _dbgAttach();
+          console.log(_dbgTag, 'asm-fallback worker constructed. codeBytes=', code.length);
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
           sfCurrentMultiPV = 1;
