@@ -1864,12 +1864,18 @@
       if (getFEN() !== fenBefore) break;
     }
   }
+  let myArrowIds = [];
   function clearArrows() {
     drawing = true;
     const b = getBoard();
     try {
-      if (b?.game?.markings?.removeAll) b.game.markings.removeAll();
+      if (b?.game?.markings?.remove && myArrowIds.length) {
+        for (const id of myArrowIds) {
+          try { b.game.markings.remove(id); } catch {}
+        }
+      }
     } catch {}
+    myArrowIds = [];
     document.querySelectorAll('.ch-arrow-svg').forEach(e => e.remove());
     drawing = false;
   }
@@ -1980,7 +1986,7 @@
     try {
       if (b.game?.markings?.addMany) {
         drawing = true;
-        b.game.markings.addMany([ {
+        const ret = b.game.markings.addMany([ {
           data: {
             from,
             to,
@@ -1989,6 +1995,7 @@
           },
           type: 'arrow'
         } ]);
+        if (Array.isArray(ret)) myArrowIds = ret.filter(x => x != null);
         drawing = false;
         return;
       }
