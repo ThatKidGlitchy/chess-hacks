@@ -1326,7 +1326,7 @@
         });
         const code = (new TextDecoder).decode(buf);
         showLoadingOverlay(null, 100);
-        const jsPrefix = 'self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev.error||ev));}catch(_){}});self.addEventListener("unhandledrejection",function(ev){try{self.postMessage("info string worker rejection: "+((ev.reason&&ev.reason.message)||ev.reason||ev));}catch(_){}});self.postMessage("info string worker started");\n';
+        const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
         sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
           type: 'application/javascript'
         })));
@@ -1351,7 +1351,7 @@
         try {
           const asmBuf = await fetchEngineWithMirrors(engine.asmUrl, () => {});
           const code = (new TextDecoder).decode(asmBuf);
-          const jsPrefix = 'self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev.error||ev));}catch(_){}});self.addEventListener("unhandledrejection",function(ev){try{self.postMessage("info string worker rejection: "+((ev.reason&&ev.reason.message)||ev.reason||ev));}catch(_){}});self.postMessage("info string worker started");\n';
+          const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
           sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
             type: 'application/javascript'
           })));
