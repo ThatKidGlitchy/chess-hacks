@@ -1870,16 +1870,13 @@
   function clearArrows() {
     drawing = true;
     const b = getBoard();
-    const keepOpp = _activeOppMove;
     try {
       if (b?.game?.markings?.removeAll) b.game.markings.removeAll();
     } catch {}
-    oppArrowIds = [];
     myArrowIds = [];
     _activeMyMove = null;
     document.querySelectorAll('.ch-arrow-svg').forEach(e => e.remove());
     drawing = false;
-    if (keepOpp && window.chessHelper.showOpponent) _drawOppArrowRaw(keepOpp);
   }
   function clearShading() {
     drawing = true;
@@ -2003,38 +2000,21 @@
     clearArrows();
     _drawMyArrowRaw(move);
   }
+  // Opp arrow uses a standalone SVG overlay (not chess.com's markings API) so
+  // it can't be wiped by markings.removeAll() — ours or chess.com's internal
+  // cleanup after makeMove().
   let oppArrowIds = [];
   function clearOpponentArrow() {
     drawing = true;
-    const b = getBoard();
-    const keepMy = _activeMyMove;
-    try {
-      if (b?.game?.markings?.removeAll) b.game.markings.removeAll();
-    } catch {}
     document.querySelectorAll('.ch-opponent-svg').forEach(e => e.remove());
     oppArrowIds = [];
-    myArrowIds = [];
     _activeOppMove = null;
     drawing = false;
-    if (keepMy && (window.chessHelper.showArrow || window.chessHelper.hiddenArrow)) _drawMyArrowRaw(keepMy);
   }
   function _drawOppArrowRaw(move) {
     _activeOppMove = move;
     const b = getBoard();
     if (!b || !move) return;
-    const from = move.slice(0, 2), to = move.slice(2, 4);
-    try {
-      if (b.game?.markings?.addMany) {
-        drawing = true;
-        const ret = b.game.markings.addMany([ {
-          data: { from, to, color: '#e04040', opacity: .8 },
-          type: 'arrow'
-        } ]);
-        if (Array.isArray(ret)) oppArrowIds = ret.filter(x => x != null);
-        drawing = false;
-        return;
-      }
-    } catch { drawing = false; }
     drawArrowSVG(b, move, '#e04040', '0.8', 'ch-opponent-svg', 1002);
   }
   function drawOpponentArrow(move) {
