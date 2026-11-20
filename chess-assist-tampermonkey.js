@@ -1109,39 +1109,49 @@
       label: 'Stockfish 19',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.asm.js'
     },
     sf18: {
       label: 'Stockfish 18',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.asm.js'
     },
     sf17: {
       label: 'Stockfish 17',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.asm.js'
     },
     sf16: {
       label: 'Stockfish 16',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
     },
     sf11: {
       label: 'Stockfish 11',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.asm.js'
     },
     sf10: {
@@ -1311,7 +1321,7 @@
         }) ]);
         const jsCode = (new TextDecoder).decode(jsBuf);
         showLoadingOverlay(null, 100);
-        const boot = 'self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev.error||ev));}catch(_){}});self.addEventListener("unhandledrejection",function(ev){try{self.postMessage("info string worker rejection: "+((ev.reason&&ev.reason.message)||ev.reason||ev));}catch(_){}});self.postMessage("info string worker started");self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
+        const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
         sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], {
           type: 'application/javascript'
         })));
@@ -1331,11 +1341,11 @@
           type: 'application/javascript'
         })));
       }
-      await uciCommand('uci', 'uciok');
+      await uciCommand('uci', 'uciok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
       uciSend('setoption name Hash value ' + (engine.hash || 64));
       sfCurrentMultiPV = 1;
       if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
-      await uciCommand('isready', 'readyok');
+      await uciCommand('isready', 'readyok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
       sfReady = true;
       sfWorker.onerror = handleWorkerCrash;
       hideLoadingOverlay();
@@ -1347,6 +1357,34 @@
         if (sfWorker) sfWorker.terminate();
       } catch {}
       sfWorker = null;
+      // Fallback 1 (wasm): the engine's older stockfish.{js,wasm} pair.
+      if (engine.kind === 'wasm' && engine.fallbackJsUrl && engine.fallbackWasmUrl) {
+        try {
+          const [jsBuf, wasmBuf] = await Promise.all([
+            fetchEngineWithMirrors(engine.fallbackJsUrl, () => {}),
+            fetchEngineWithMirrors(engine.fallbackWasmUrl, () => {})
+          ]);
+          const jsCode = (new TextDecoder).decode(jsBuf);
+          const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
+          sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], { type: 'application/javascript' })));
+          sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [ wasmBuf ]);
+          await uciCommand('uci', 'uciok', 20000);
+          uciSend('setoption name Hash value ' + (engine.hash || 64));
+          sfCurrentMultiPV = 1;
+          if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
+          await uciCommand('isready', 'readyok', 20000);
+          sfReady = true;
+          sfWorker.onerror = handleWorkerCrash;
+          lastEngineResponse = Date.now();
+          installReadyokListener();
+          hideLoadingOverlay();
+          return;
+        } catch (eFallback) {
+          console.warn('[Chess Assist] wasm fallback failed:', eFallback);
+          try { if (sfWorker) sfWorker.terminate(); } catch {}
+          sfWorker = null;
+        }
+      }
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
           const asmBuf = await fetchEngineWithMirrors(engine.asmUrl, () => {});
@@ -1534,7 +1572,7 @@
   function uciSend(cmd) {
     if (sfWorker) sfWorker.postMessage(cmd);
   }
-  function uciCommand(cmd, waitFor) {
+  function uciCommand(cmd, waitFor, timeoutMs) {
     return new Promise((resolve, reject) => {
       const worker = sfWorker;
       if (!worker) {
@@ -1546,7 +1584,7 @@
           worker.removeEventListener('message', handler);
         } catch {}
         reject(new Error('UCI timeout waiting for ' + waitFor));
-      }, 6e4);
+      }, timeoutMs || 6e4);
       const handler = e => {
         lastEngineResponse = Date.now();
         if (typeof e.data === 'string' && e.data.startsWith(waitFor)) {
