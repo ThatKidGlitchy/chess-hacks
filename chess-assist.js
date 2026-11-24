@@ -1590,56 +1590,6 @@
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
   let sfWorkerUrl = null;
 
-  const ENGINE_HASHES = {
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.js':   '667f2610acd6015d85b0001ec55721ebccee7d25f8a075089159efeea8583779',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.wasm': 'ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.js':   '21b5d924609772e6bd4c0fbdb960268715a97fffaab04b438c76f2e34d6fd521',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.wasm': 'a8fbc05ec6920b56d7485826dcb02c5ffd2826bcbf751cf973046f237a9096f1',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.js':   '1cbb8798cc990762ee4a2d042eb4122f9da604ef4842fc5b60b4e6a4d0ab7f38',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.wasm': '7ca31bedd166148931a1cc84dbd8dd9cf001744e9994caf23a3c6ff4988d7086',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.js':   '8daed7a71aaee09c38956e8a99db1f2430334218937e76a48ed3b905c5b3560e',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.wasm': 'a7acf7f20cb81d755b39b3dd42a4bdfd6e8c8d3d203d9fbdc525e40e1f68df08',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.js':   'b3c2e301658ae212e56a363df5557e2fbea7c6115e0445cde736a3c9f36d9333',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.wasm': 'e5f1deb483cc28bcf4dff5d3cb9abb9aee697c1fe174c60d1c5cc476da76cae8',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js': 'ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm': 'ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.asm.js': 'c07dad9a00a89f4b1dcba3971d58d8078715556eac0212368e4aab510e1e27c9',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js': '5243fd9b276cab7dfe3ad1d43ab9ead73568fac76468c614242977a210c4a391',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm': 'a8fbc05ec6920b56d7485826dcb02c5ffd2826bcbf751cf973046f237a9096f1',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.asm.js': '5c3b0998ca263baa8da83d3ec6ff154db461f3531e45840e5ba7ad28f806427c',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js': '1c8265e52fdaef797684b4979b42c5dcfe0350df3e11a87e48e4ec5f86e0ca5c',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm': '7ca31bedd166148931a1cc84dbd8dd9cf001744e9994caf23a3c6ff4988d7086',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.asm.js': '3651fc70f951d14fdc90f7497941ab62d59c9e70b967a451a69f92b3a3f377f0',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js': 'e2958bb89fc6ee0faedde87284bbb7e14da2ab224f06ca1bd82e62eaca87d00b',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm': 'a7acf7f20cb81d755b39b3dd42a4bdfd6e8c8d3d203d9fbdc525e40e1f68df08',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js': 'b203c697e523cc7b336c7ae3fe5057849a63c2c96f385a889512e21bc85d2003',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm': 'e5f1deb483cc28bcf4dff5d3cb9abb9aee697c1fe174c60d1c5cc476da76cae8',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.asm.js': '0f2a97f09805198135a87cc4e1d317096446c410af82dfbd5124627f34d5d6f5',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.asm.js': '90e3c0639d41282e6f4cc99c3d3eb0afb67c27910d6d7546cd4f1803134258e4',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/8/stockfish.js': '402807d5a022f37c63cefa9f7d1c24ec6cae84c496035aa28f82d883981081f9',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/11/lozza.js': 'd1faf3c5c2a1add4e93c73615dc9d1df5983b3933d8d740e0efb11f838fbd741',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/garbochess/1/garbochess.js?v=4': 'd7935a8bff0572615b14dae6b6d40169431e7e5627e499fcb10139a6bda47e16',
-    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/p4wn/1/p4wn.js?v=3': 'd2e8939d15be88e02326afffe7870719bd5a540fd7d2f0ff3c168eb593324de8',
-  };
-  async function sha256Hex(buf) {
-    const h = await crypto.subtle.digest('SHA-256', buf);
-    const b = new Uint8Array(h);
-    let s = '';
-    for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, '0');
-    return s;
-  }
-  async function verifyEngineBytes(url, buf) {
-    const expected = ENGINE_HASHES[url];
-    if (!expected) {
-      console.warn('[Chess Assist] no pinned SHA-256 for', url, '— loading without verification');
-      return;
-    }
-    const actual = await sha256Hex(buf);
-    if (actual.toLowerCase() !== expected.toLowerCase()) {
-      console.warn('[Chess Assist] SHA-256 mismatch for ' + url + ' (expected ' + expected + ', got ' + actual + ') — loading anyway (likely CDN variance or truncated fetch)');
-    }
-  }
-
   const ENGINES = {
     sf19: {
       label: 'Stockfish 19',
@@ -1842,8 +1792,6 @@
           wasmTotal = t;
           updateProgress();
         }) ]);
-        await verifyEngineBytes(engine.jsUrl, jsBuf);
-        await verifyEngineBytes(engine.wasmUrl, wasmBuf);
         const jsCode = (new TextDecoder).decode(jsBuf);
         _show(null, 100);
         const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
@@ -1860,7 +1808,6 @@
         const buf = await fetchWithProgress(engine.url, (r, t) => {
           if (t > 0) _show(null, r / t * 100);
         });
-        await verifyEngineBytes(engine.url, buf);
         const code = (new TextDecoder).decode(buf);
         _show(null, 100);
         const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
@@ -1917,7 +1864,6 @@
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
           const asmBuf = await fetchWithProgress(engine.asmUrl, () => {});
-          await verifyEngineBytes(engine.asmUrl, asmBuf);
           const code = (new TextDecoder).decode(asmBuf);
           const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
               sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'text/javascript' }));
