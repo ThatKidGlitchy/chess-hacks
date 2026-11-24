@@ -1,14 +1,15 @@
 // ==UserScript==
 // @name         Chess Assist
 // @namespace    https://github.com/ThatKidGlitchy/chess-hacks
-// @version      1.4.4.1
-// @description  Chess.com assistant with 14 selectable engines (Stockfish 8-19, Lozza, Garbochess), auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection, custom skins, and per-engine depth memory.
+// @version      1.5.0
+// @description  Chess.com and ChessKid.com assistant with 14 selectable engines (Stockfish 8-19, Lozza, Garbochess), auto-play, best move arrows, opponent move prediction, win percent eval bar, real-time cheat detection, custom skins, whole-site themes, accent color picker, move explainer (beta), and per-engine depth memory.
 // @author       ThatKidGlitchy
 // @homepageURL  https://github.com/ThatKidGlitchy/chess-hacks
 // @supportURL   https://github.com/ThatKidGlitchy/chess-hacks/issues
 // @updateURL    https://raw.githubusercontent.com/ThatKidGlitchy/chess-hacks/main/chess-assist-tampermonkey.js
 // @downloadURL  https://raw.githubusercontent.com/ThatKidGlitchy/chess-hacks/main/chess-assist-tampermonkey.js
 // @match        *://*.chess.com/*
+// @match        *://*.chesskid.com/*
 // @grant        none
 // ==/UserScript==
 (() => {
@@ -265,6 +266,8 @@
     .ch-keybind:hover { color:#fff; background:rgba(255,255,255,0.15); }
     .ch-keybind.recording { color:var(--ch-accent); background:rgba(129,182,76,0.15); animation:ch-pulse 1s infinite; }
     @keyframes ch-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    @keyframes ch-wn-in-right { from { opacity:0; transform:translateX(16px); } to { opacity:1; transform:translateX(0); } }
+    @keyframes ch-wn-in-left { from { opacity:0; transform:translateX(-16px); } to { opacity:1; transform:translateX(0); } }
     .ch-promo-ring { position:relative; box-shadow:0 0 0 3px var(--ch-accent), 0 0 14px 3px var(--ch-accent); border-radius:10px; animation:ch-promo-ring-pulse 1s ease-in-out infinite; z-index:3; pointer-events:auto; }
     @keyframes ch-promo-ring-pulse { 0%,100% { box-shadow:0 0 0 3px var(--ch-accent), 0 0 14px 3px var(--ch-accent); } 50% { box-shadow:0 0 0 5px var(--ch-accent), 0 0 22px 5px var(--ch-accent); } }
     .ch-ai-typing { display:inline-flex; gap:4px; align-items:flex-end; padding:2px 0; }
@@ -3829,10 +3832,16 @@
   const CURRENT_VERSION = '1.5.0';
   const CHANGELOG = {
     '1.5.0': [
-      '<b>Move explainer (beta)</b>. New narrator in the Gameplay tab that comments on your moves and your opponent’s moves as you play, in plain language.',
-      '<b>Accent color picker</b> in Settings → Appearance. Pick any color for the UI accent (panel highlights, arrows, buttons, eval bar). Click the swatch for the native color wheel, or type a hex directly into the box (the "#" stays put, you edit the 6 chars after it).',
-      '<b>Ad blocker</b> toggle in Settings. Blocks chess.com’s ad slots so the board and panel have room to breathe.',
-      '<b>Feedback section</b> in Settings. Found something to report or want to suggest a feature? Open a one-click link to the feedback form.'
+      [
+        '<b>Move explainer (beta)</b>. New narrator in the Gameplay tab that comments on your moves and your opponent’s moves as you play, in plain language.',
+        '<b>Accent color picker</b> in Settings → Appearance. Pick any color for the UI accent (panel highlights, arrows, buttons, eval bar).',
+        '<b>Ad blocker</b> toggle in Settings. Blocks chess.com’s ad slots so the board and panel have room to breathe.',
+        '<b>Feedback section</b> in Settings. Found something to report or want to suggest a feature? Open a one-click link to the feedback form.'
+      ],
+      [
+        '<b>ChessKid.com compatibility</b>. Chess Assist now runs on <a href="https://www.chesskid.com" target="_blank" rel="noopener" style="color:var(--ch-accent);text-decoration:underline;">chesskid.com</a> too — same panel, same features, same arrows and eval bar on the ChessKid board.',
+        '<b>Whole-site Themes page</b> in the Skins tab. New 4th page with full site themes (AMOLED, Night Owl, Frutiger Aero, Pink, and more). Click a tile to apply the theme across the site; hit Clear theme to go back to default.'
+      ]
     ],
     '1.4.4': [ '<b>Boards tab</b> — third page on the Skins tab with a gallery of board themes. Click a tile and the board artwork applies instantly. Searchable, like the premade piece sets, with full credits to the original artists.', '<b>More premade piece sets</b> — expanded the Lichess / Rhosgfx / Sharechess catalog so there are more options on the premade page without having to upload your own.', '<b>Auto-play no longer freezes against fast opponents</b> — if the opponent premoves or replies in under ~300 ms, their move was already on the board by the time the script finished playing yours, which left auto-play stuck waiting for a FEN change that had already happened. Auto-play now detects this case and keeps going immediately.' ],
     '1.4.3': [ '<b>Interface in 16 languages</b> — English, Español, Français, Deutsch, Português, Русский, Italiano, Polski, Nederlands, Türkçe, 简体中文, 日本語, 한국어, Українська, हिन्दी, العربية. First-run picker; switch any time in Settings → Language. Non-English dictionaries fetched on demand from CDN with a 24hr local cache, so the extension stays small.', '<b>Smart text fit</b> — translated labels that would be wider than the English equivalent scale their font-size down automatically, so long German, Dutch or Russian strings never push the opacity slider or anything else outside the panel borders.', '<b>Detection stats persist until the next game</b> — accuracy, best-move rate, CPL and suspicion score stay visible after the game ends, through the lobby, and only clear once the first move of a new game is tracked. Reviewing a finished game no longer wipes the numbers mid-review.' ],
@@ -3852,18 +3861,45 @@
     const changelogKey = 'changelog_' + CURRENT_VERSION.replace(/\./g, '_');
     const langPack = (currentLang && LANGS[currentLang]) || {};
     const translated = Array.isArray(langPack[changelogKey]) ? langPack[changelogKey] : null;
-    const items = (translated && translated.length) ? translated : (CHANGELOG[CURRENT_VERSION] || []);
-    if (!items.length) return;
+    const raw = (translated && translated.length) ? translated : (CHANGELOG[CURRENT_VERSION] || []);
+    if (!raw.length) return;
+    const pages = Array.isArray(raw[0]) ? raw : [raw];
+    const pageCount = pages.length;
+    let pageIdx = 0;
     const backdrop = document.createElement('div');
     backdrop.id = 'ch-whatsnew-backdrop';
     backdrop.className = 'visible';
-    backdrop.innerHTML = `
-      <div id="ch-whatsnew-modal" role="dialog" aria-modal="true" aria-labelledby="ch-whatsnew-title">
-        <h2 id="ch-whatsnew-title">${t('wnTitle')} v${CURRENT_VERSION}</h2>
-        <div class="ch-wn-sub">${t('wnSub')}</div>
-        <ul>${items.map(it => `<li>${it}</li>`).join('')}</ul>
-        <button id="ch-whatsnew-ok">${t('wnOk')}</button>
-      </div>`;
+    let lastIdx = 0;
+    const render = (dir) => {
+      const items = pages[pageIdx] || [];
+      const pager = pageCount > 1 ? `
+        <div class="ch-pager" style="margin:0 0 10px;">
+          <button class="ch-pager-arrow" id="ch-wn-prev" aria-label="Previous page" ${pageIdx===0?'disabled':''}><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M5 1L1 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+          <div class="ch-pager-dots">${pages.map((_, i) => `<div class="ch-pager-dot${i===pageIdx?' active':''}" data-i="${i}"></div>`).join('')}</div>
+          <span class="ch-pager-count">${pageIdx + 1}/${pageCount}</span>
+          <button class="ch-pager-arrow" id="ch-wn-next" aria-label="Next page" ${pageIdx===pageCount-1?'disabled':''}><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>` : '';
+      backdrop.innerHTML = `
+        <div id="ch-whatsnew-modal" role="dialog" aria-modal="true" aria-labelledby="ch-whatsnew-title">
+          <h2 id="ch-whatsnew-title">${t('wnTitle')} v${CURRENT_VERSION}</h2>
+          <div class="ch-wn-sub">${t('wnSub')}</div>
+          ${pager}
+          <ul class="ch-wn-list">${items.map(it => `<li>${it}</li>`).join('')}</ul>
+          <button id="ch-whatsnew-ok">${t('wnOk')}</button>
+        </div>`;
+      const list = backdrop.querySelector('.ch-wn-list');
+      if (list && dir) {
+        list.style.animation = dir > 0 ? 'ch-wn-in-right .22s ease' : 'ch-wn-in-left .22s ease';
+      }
+      backdrop.querySelector('#ch-whatsnew-ok').onclick = close;
+      const prev = backdrop.querySelector('#ch-wn-prev');
+      const next = backdrop.querySelector('#ch-wn-next');
+      if (prev) prev.onclick = () => { if (pageIdx > 0) { const p = pageIdx; pageIdx--; render(pageIdx - p); } };
+      if (next) next.onclick = () => { if (pageIdx < pageCount - 1) { const p = pageIdx; pageIdx++; render(pageIdx - p); } };
+      backdrop.querySelectorAll('.ch-pager-dot').forEach(d => {
+        d.onclick = () => { const p = pageIdx; pageIdx = +d.dataset.i; render(pageIdx - p); };
+      });
+    };
     document.body.appendChild(backdrop);
     const close = () => {
       try {
@@ -3871,7 +3907,7 @@
       } catch {}
       backdrop.remove();
     };
-    backdrop.querySelector('#ch-whatsnew-ok').onclick = close;
+    render();
     backdrop.addEventListener('click', e => {
       if (e.target === backdrop) close();
     });
@@ -3879,6 +3915,10 @@
       if (e.key === 'Escape') {
         close();
         document.removeEventListener('keydown', esc);
+      } else if (e.key === 'ArrowRight' && pageIdx < pageCount - 1) {
+        pageIdx++; render(1);
+      } else if (e.key === 'ArrowLeft' && pageIdx > 0) {
+        pageIdx--; render(-1);
       }
     });
   }
