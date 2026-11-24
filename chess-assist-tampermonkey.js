@@ -1604,6 +1604,16 @@
   let sfWorkerUrl = null;
 
   const ENGINE_HASHES = {
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.js':   '667f2610acd6015d85b0001ec55721ebccee7d25f8a075089159efeea8583779',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.wasm': 'ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.js':   '21b5d924609772e6bd4c0fbdb960268715a97fffaab04b438c76f2e34d6fd521',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.wasm': 'a8fbc05ec6920b56d7485826dcb02c5ffd2826bcbf751cf973046f237a9096f1',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.js':   '1cbb8798cc990762ee4a2d042eb4122f9da604ef4842fc5b60b4e6a4d0ab7f38',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.wasm': '7ca31bedd166148931a1cc84dbd8dd9cf001744e9994caf23a3c6ff4988d7086',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.js':   '8daed7a71aaee09c38956e8a99db1f2430334218937e76a48ed3b905c5b3560e',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.wasm': 'a7acf7f20cb81d755b39b3dd42a4bdfd6e8c8d3d203d9fbdc525e40e1f68df08',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.js':   'b3c2e301658ae212e56a363df5557e2fbea7c6115e0445cde736a3c9f36d9333',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.wasm': 'e5f1deb483cc28bcf4dff5d3cb9abb9aee697c1fe174c60d1c5cc476da76cae8',
     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js': 'ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a',
     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm': 'ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de',
     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.asm.js': 'c07dad9a00a89f4b1dcba3971d58d8078715556eac0212368e4aab510e1e27c9',
@@ -1648,39 +1658,49 @@
       label: 'Stockfish 19',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.asm.js'
     },
     sf18: {
       label: 'Stockfish 18',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.asm.js'
     },
     sf17: {
       label: 'Stockfish 17',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.asm.js'
     },
     sf16: {
       label: 'Stockfish 16',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
     },
     sf11: {
       label: 'Stockfish 11',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js',
-      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm',
+      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.js',
+      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.wasm',
+      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js',
+      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.asm.js'
     },
     sf10: {
@@ -1874,10 +1894,39 @@
       installReadyokListener();
     } catch (e) {
       console.warn('[Chess Assist] engine init failed:', e);
-      try {
-        if (sfWorker) sfWorker.terminate();
-      } catch {}
+      try { if (sfWorker) sfWorker.terminate(); } catch {}
       sfWorker = null;
+      if (engine.kind === 'wasm' && engine.fallbackJsUrl && engine.fallbackWasmUrl) {
+        try {
+          console.log(_dbgTag, currentEngine, 'lite-single failed, trying older wasm fallback');
+          const [jsBuf, wasmBuf] = await Promise.all([
+            fetchWithProgress(engine.fallbackJsUrl, () => {}),
+            fetchWithProgress(engine.fallbackWasmUrl, () => {})
+          ]);
+          const jsCode = (new TextDecoder).decode(jsBuf);
+          const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
+          sfWorkerUrl = URL.createObjectURL(new Blob([ boot ], { type: 'text/javascript' }));
+          sfWorker = new Worker(sfWorkerUrl);
+          _dbgAttach();
+          console.log(_dbgTag, currentEngine, 'wasm-fallback worker constructed. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
+          sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [ wasmBuf ]);
+          await uciCommand('uci', 'uciok');
+          uciSend('setoption name Hash value ' + (engine.hash || 64));
+          sfCurrentMultiPV = 1;
+          if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
+          await uciCommand('isready', 'readyok');
+          sfReady = true;
+          sfWorker.onerror = handleWorkerCrash;
+          lastEngineResponse = Date.now();
+          installReadyokListener();
+          hideLoadingOverlay();
+          return;
+        } catch (eFallback) {
+          console.warn('[Chess Assist] wasm fallback failed:', eFallback);
+          try { if (sfWorker) sfWorker.terminate(); } catch {}
+          sfWorker = null;
+        }
+      }
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
           const asmBuf = await fetchWithProgress(engine.asmUrl, () => {});
