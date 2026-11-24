@@ -1791,19 +1791,6 @@
   async function _doInitEngine() {
     if (sfWorker) return;
     const engine = ENGINES[currentEngine] || ENGINES['sf19'];
-    const _dbgTag = '[CH-WORKER-DBG]';
-    const _dbgAttach = () => {
-      if (!sfWorker) return;
-      sfWorker.addEventListener('message', ev => {
-        try { console.log(_dbgTag, typeof ev.data === 'string' ? ev.data.slice(0, 200) : ev.data); } catch (_) {}
-      });
-      sfWorker.addEventListener('error', ev => {
-        try { console.warn(_dbgTag, 'worker.onerror:', ev.message || ev.error || ev, 'filename:', ev.filename, 'line:', ev.lineno); } catch (_) {}
-      });
-      sfWorker.addEventListener('messageerror', ev => {
-        try { console.warn(_dbgTag, 'messageerror:', ev); } catch (_) {}
-      });
-    };
     try {
       if (engine.kind === 'wasm') {
         let jsBytes = 0, jsTotal = 0, wasmBytes = 0, wasmTotal = 0;
@@ -1829,8 +1816,6 @@
         sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], {
           type: 'application/javascript'
         })));
-        _dbgAttach();
-        console.log(_dbgTag, 'wasm worker constructed, posting init. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
         sfWorker.postMessage({
           type: 'init',
           wasm: wasmBuf,
@@ -1846,8 +1831,6 @@
         sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
           type: 'application/javascript'
         })));
-        _dbgAttach();
-        console.log(_dbgTag, 'js worker constructed. codeBytes=', code.length);
       }
       // Primary attempt — fast timeout so we can fall back to older wasm/asm quickly on Safari.
       await uciCommand('uci', 'uciok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
@@ -1869,7 +1852,6 @@
       // Fallback 1 (wasm): the engine's older stockfish.{js,wasm} pair.
       if (engine.kind === 'wasm' && engine.fallbackJsUrl && engine.fallbackWasmUrl) {
         try {
-          console.log(_dbgTag, 'lite-single failed, trying older wasm fallback');
           const [jsBuf, wasmBuf] = await Promise.all([
             fetchEngineWithMirrors(engine.fallbackJsUrl, () => {}),
             fetchEngineWithMirrors(engine.fallbackWasmUrl, () => {})
@@ -1877,8 +1859,6 @@
           const jsCode = (new TextDecoder).decode(jsBuf);
           const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
           sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], { type: 'application/javascript' })));
-          _dbgAttach();
-          console.log(_dbgTag, 'wasm-fallback worker constructed. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
           sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [ wasmBuf ]);
           await uciCommand('uci', 'uciok', 20000);
           uciSend('setoption name Hash value ' + (engine.hash || 64));
@@ -1906,8 +1886,6 @@
           sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
             type: 'application/javascript'
           })));
-          _dbgAttach();
-          console.log(_dbgTag, 'asm-fallback worker constructed. codeBytes=', code.length);
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
           sfCurrentMultiPV = 1;
