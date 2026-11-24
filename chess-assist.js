@@ -1753,8 +1753,14 @@
   async function initEngine() {
     if (sfReady) return;
     if (_initP) return _initP;
-    _initP = _doInitEngine().catch(e => {
+    _initP = Promise.race([
+      _doInitEngine(),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('engine init overall timeout (45s)')), 45000))
+    ]).catch(e => {
       _initP = null;
+      try { hideLoadingOverlay(); } catch {}
+      try { if (sfWorker) sfWorker.terminate(); } catch {}
+      sfWorker = null; sfWorkerUrl = null; sfReady = false;
       throw e;
     });
     return _initP;
@@ -1788,8 +1794,7 @@
         const jsCode = (new TextDecoder).decode(jsBuf);
         _show(null, 100);
         const boot = 'try{if(typeof SharedArrayBuffer==="undefined"){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}else{try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+err);});}catch(err){self.postMessage("info string Stockfish boot error: "+err);}}}};';
-        try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
-        sfWorkerUrl = URL.createObjectURL(new Blob([ boot ], { type: 'application/javascript' }));
+          sfWorkerUrl = URL.createObjectURL(new Blob([ boot ], { type: 'text/javascript' }));
         sfWorker = new Worker(sfWorkerUrl);
         sfWorker.postMessage({
           type: 'init',
@@ -1804,9 +1809,14 @@
         const code = (new TextDecoder).decode(buf);
         _show(null, 100);
         const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
-        try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
-        sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'application/javascript' }));
+          sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'text/javascript' }));
         sfWorker = new Worker(sfWorkerUrl);
+        try {
+          const _dbg = (e) => { console.log('[Chess Assist DEBUG] worker boot msg:', typeof e.data === 'string' ? e.data.slice(0, 120) : e.data); };
+          sfWorker.addEventListener('message', _dbg);
+          sfWorker.addEventListener('error', (ev) => { console.warn('[Chess Assist DEBUG] worker boot error:', ev && (ev.message || ev.filename), ev && ev.lineno); });
+          setTimeout(() => { try { sfWorker && sfWorker.removeEventListener('message', _dbg); } catch {} }, 20000);
+        } catch {}
       }
       await uciCommand('uci', 'uciok');
       uciSend('setoption name Hash value ' + (engine.hash || 64));
@@ -1830,8 +1840,7 @@
           await verifyEngineBytes(engine.asmUrl, asmBuf);
           const code = (new TextDecoder).decode(asmBuf);
           const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
-          try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
-          sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'application/javascript' }));
+              sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'text/javascript' }));
           sfWorker = new Worker(sfWorkerUrl);
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
@@ -1878,7 +1887,6 @@
         sfWorker.terminate();
       }
     } catch {}
-    try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
     sfWorkerUrl = null;
     sfWorker = null;
     sfReady = false;
