@@ -1728,42 +1728,70 @@
       } catch (e) { rej(e); }
     });
   }
-  async function fetchWithProgress(url, onBytes) {
+  // Try the same resource across multiple CDN mirrors so a single blocked/slow CDN
+  // (common for Safari users with content blockers, Private Relay, or ITP quirks)
+  // doesn't hang the engine load. Chain: jsDelivr primary → Fastly edge → raw.github.
+  async function fetchEngineWithMirrors(url, onBytes) {
     const mirrors = [url];
     if (/cdn\.jsdelivr\.net/.test(url)) {
       mirrors.push(url.replace('cdn.jsdelivr.net', 'fastly.jsdelivr.net'));
     }
-    const rawMatch = url.match(/^https:\/\/(?:cdn|fastly)\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+?)(\?.*)?$/);
+    const rawMatch = url.match(/^https:\/\/(?:cdn|fastly)\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+)$/);
     if (rawMatch) {
       const [, owner, repo, ref, path] = rawMatch;
-      mirrors.push('https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + ref + '/' + path);
+      mirrors.push(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`);
     }
     let lastErr;
     for (let i = 0; i < mirrors.length; i++) {
-      const m = mirrors[i];
+      const mirrorUrl = mirrors[i];
       try {
-        if (i > 0) console.warn('[Chess Assist] retrying from mirror ' + (i + 1) + '/' + mirrors.length + ':', m);
-        return await xhrArrayBuffer(m, onBytes, 60000);
+        if (i > 0) console.warn('[Chess Assist] retrying from mirror ' + (i + 1) + '/' + mirrors.length + ':', mirrorUrl);
+        return await fetchWithProgress(mirrorUrl, onBytes);
       } catch (e) {
         lastErr = e;
-        console.warn('[Chess Assist] mirror ' + (i + 1) + ' failed:', m, (e && e.message) || e);
+        console.warn('[Chess Assist] mirror ' + (i + 1) + ' failed:', mirrorUrl, (e && e.message) || e);
       }
     }
     throw lastErr || new Error('all mirrors failed for ' + url);
   }
+
+  async function fetchWithProgress(url, onBytes) {
+    const TIMEOUT_MS = 60000;
+    let ctrl = null, timer = null;
+    try {
+      ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      timer = setTimeout(() => { try { ctrl && ctrl.abort(); } catch {} }, TIMEOUT_MS);
+      const resp = await fetch(url, ctrl ? { signal: ctrl.signal } : undefined);
+      if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + url);
+      if (!resp.body || !resp.body.getReader) { const ab = await resp.arrayBuffer(); clearTimeout(timer); return ab; }
+      const total = Number(resp.headers.get('Content-Length')) || 0;
+      const reader = resp.body.getReader();
+      const chunks = [];
+      let received = 0;
+      while (true) {
+        const {done, value} = await reader.read();
+        if (done) break;
+        chunks.push(value);
+        received += value.length;
+        try { onBytes(received, total); } catch {}
+      }
+      clearTimeout(timer);
+      const buf = new Uint8Array(received);
+      let off = 0;
+      for (const c of chunks) { buf.set(c, off); off += c.length; }
+      return buf.buffer;
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[Chess Assist] fetch stream failed, falling back to XHR:', e && e.message);
+      return xhrArrayBuffer(url, onBytes, TIMEOUT_MS);
+    }
+  }
   let _initP = null;
-  let _silentReinit = false;
   async function initEngine() {
     if (sfReady) return;
     if (_initP) return _initP;
-    _initP = Promise.race([
-      _doInitEngine(),
-      new Promise((_, rej) => setTimeout(() => rej(new Error('engine init overall timeout (45s)')), 45000))
-    ]).catch(e => {
+    _initP = _doInitEngine().catch(e => {
       _initP = null;
-      try { hideLoadingOverlay(); } catch {}
-      try { if (sfWorker) sfWorker.terminate(); } catch {}
-      sfWorker = null; sfWorkerUrl = null; sfReady = false;
       throw e;
     });
     return _initP;
@@ -1771,19 +1799,17 @@
   async function _doInitEngine() {
     if (sfWorker) return;
     const engine = ENGINES[currentEngine] || ENGINES['sf19'];
-    const _silent = _silentReinit;
-    const _show = _silent ? () => {} : showLoadingOverlay;
     const _dbgTag = '[CH-WORKER-DBG]';
     const _dbgAttach = () => {
       if (!sfWorker) return;
       sfWorker.addEventListener('message', ev => {
-        try { console.log(_dbgTag, currentEngine, typeof ev.data === 'string' ? ev.data.slice(0, 200) : ev.data); } catch (_) {}
+        try { console.log(_dbgTag, typeof ev.data === 'string' ? ev.data.slice(0, 200) : ev.data); } catch (_) {}
       });
       sfWorker.addEventListener('error', ev => {
-        try { console.warn(_dbgTag, currentEngine, 'worker.onerror:', ev.message || ev.error || ev, 'filename:', ev.filename, 'line:', ev.lineno); } catch (_) {}
+        try { console.warn(_dbgTag, 'worker.onerror:', ev.message || ev.error || ev, 'filename:', ev.filename, 'line:', ev.lineno); } catch (_) {}
       });
       sfWorker.addEventListener('messageerror', ev => {
-        try { console.warn(_dbgTag, currentEngine, 'messageerror:', ev); } catch (_) {}
+        try { console.warn(_dbgTag, 'messageerror:', ev); } catch (_) {}
       });
     };
     try {
@@ -1793,47 +1819,50 @@
           const total = jsTotal + wasmTotal;
           if (total > 0) {
             const pct = (jsBytes + wasmBytes) / total * 100;
-            _show(null, pct);
+            showLoadingOverlay(null, pct);
           }
         };
-        const [jsBuf, wasmBuf] = await Promise.all([ fetchWithProgress(engine.jsUrl, (r, t) => {
+        const [jsBuf, wasmBuf] = await Promise.all([ fetchEngineWithMirrors(engine.jsUrl, (r, t) => {
           jsBytes = r;
           jsTotal = t;
           updateProgress();
-        }), fetchWithProgress(engine.wasmUrl, (r, t) => {
+        }), fetchEngineWithMirrors(engine.wasmUrl, (r, t) => {
           wasmBytes = r;
           wasmTotal = t;
           updateProgress();
         }) ]);
         const jsCode = (new TextDecoder).decode(jsBuf);
-        _show(null, 100);
+        showLoadingOverlay(null, 100);
         const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
-          sfWorkerUrl = URL.createObjectURL(new Blob([ boot ], { type: 'text/javascript' }));
-        sfWorker = new Worker(sfWorkerUrl);
+        sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], {
+          type: 'application/javascript'
+        })));
         _dbgAttach();
-        console.log(_dbgTag, currentEngine, 'wasm worker constructed, posting init. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
+        console.log(_dbgTag, 'wasm worker constructed, posting init. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
         sfWorker.postMessage({
           type: 'init',
           wasm: wasmBuf,
           js: jsCode
         }, [ wasmBuf ]);
       } else {
-        const buf = await fetchWithProgress(engine.url, (r, t) => {
-          if (t > 0) _show(null, r / t * 100);
+        const buf = await fetchEngineWithMirrors(engine.url, (r, t) => {
+          if (t > 0) showLoadingOverlay(null, r / t * 100);
         });
         const code = (new TextDecoder).decode(buf);
-        _show(null, 100);
+        showLoadingOverlay(null, 100);
         const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
-          sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'text/javascript' }));
-        sfWorker = new Worker(sfWorkerUrl);
+        sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
+          type: 'application/javascript'
+        })));
         _dbgAttach();
-        console.log(_dbgTag, currentEngine, 'js worker constructed. codeBytes=', code.length);
+        console.log(_dbgTag, 'js worker constructed. codeBytes=', code.length);
       }
-      await uciCommand('uci', 'uciok');
+      // Primary attempt — fast timeout so we can fall back to older wasm/asm quickly on Safari.
+      await uciCommand('uci', 'uciok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
       uciSend('setoption name Hash value ' + (engine.hash || 64));
       sfCurrentMultiPV = 1;
       if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
-      await uciCommand('isready', 'readyok');
+      await uciCommand('isready', 'readyok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
       sfReady = true;
       sfWorker.onerror = handleWorkerCrash;
       hideLoadingOverlay();
@@ -1841,27 +1870,29 @@
       installReadyokListener();
     } catch (e) {
       console.warn('[Chess Assist] engine init failed:', e);
-      try { if (sfWorker) sfWorker.terminate(); } catch {}
+      try {
+        if (sfWorker) sfWorker.terminate();
+      } catch {}
       sfWorker = null;
+      // Fallback 1 (wasm): the engine's older stockfish.{js,wasm} pair.
       if (engine.kind === 'wasm' && engine.fallbackJsUrl && engine.fallbackWasmUrl) {
         try {
-          console.log(_dbgTag, currentEngine, 'lite-single failed, trying older wasm fallback');
+          console.log(_dbgTag, 'lite-single failed, trying older wasm fallback');
           const [jsBuf, wasmBuf] = await Promise.all([
-            fetchWithProgress(engine.fallbackJsUrl, () => {}),
-            fetchWithProgress(engine.fallbackWasmUrl, () => {})
+            fetchEngineWithMirrors(engine.fallbackJsUrl, () => {}),
+            fetchEngineWithMirrors(engine.fallbackWasmUrl, () => {})
           ]);
           const jsCode = (new TextDecoder).decode(jsBuf);
           const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
-          sfWorkerUrl = URL.createObjectURL(new Blob([ boot ], { type: 'text/javascript' }));
-          sfWorker = new Worker(sfWorkerUrl);
+          sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], { type: 'application/javascript' })));
           _dbgAttach();
-          console.log(_dbgTag, currentEngine, 'wasm-fallback worker constructed. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
+          console.log(_dbgTag, 'wasm-fallback worker constructed. jsBytes=', jsCode.length, 'wasmBytes=', wasmBuf.byteLength);
           sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [ wasmBuf ]);
-          await uciCommand('uci', 'uciok');
+          await uciCommand('uci', 'uciok', 20000);
           uciSend('setoption name Hash value ' + (engine.hash || 64));
           sfCurrentMultiPV = 1;
           if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
-          await uciCommand('isready', 'readyok');
+          await uciCommand('isready', 'readyok', 20000);
           sfReady = true;
           sfWorker.onerror = handleWorkerCrash;
           lastEngineResponse = Date.now();
@@ -1874,15 +1905,17 @@
           sfWorker = null;
         }
       }
+      // Fallback 2 (wasm): asm.js single-file build.
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
-          const asmBuf = await fetchWithProgress(engine.asmUrl, () => {});
+          const asmBuf = await fetchEngineWithMirrors(engine.asmUrl, () => {});
           const code = (new TextDecoder).decode(asmBuf);
           const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
-              sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'text/javascript' }));
-          sfWorker = new Worker(sfWorkerUrl);
+          sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
+            type: 'application/javascript'
+          })));
           _dbgAttach();
-          console.log(_dbgTag, currentEngine, 'asm-fallback worker constructed. codeBytes=', code.length);
+          console.log(_dbgTag, 'asm-fallback worker constructed. codeBytes=', code.length);
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
           sfCurrentMultiPV = 1;
@@ -1928,7 +1961,6 @@
         sfWorker.terminate();
       }
     } catch {}
-    sfWorkerUrl = null;
     sfWorker = null;
     sfReady = false;
     _initP = null;
@@ -1963,7 +1995,6 @@
     detection.lastMyEvalCp = null;
     detection.lastMyEvalFen = null;
     applyDepthCap();
-    try { await new Promise(r => setTimeout(r, 80)); } catch {}
     try {
       await initEngine();
     } catch (e) {
@@ -2016,7 +2047,6 @@
     const now = Date.now();
     if (now - _crashWindowStart > 60000) { _crashWindowStart = now; _crashCount = 0; }
     _crashCount++;
-    if (pendingQuery && pendingQuery.fen) _crashedFens.add(pendingQuery.fen);
     if (_crashCount > 3) {
       console.warn('[Chess Assist] Engine crashed ' + _crashCount + ' times in 60s — giving up');
       hideLoadingOverlay();
@@ -2050,10 +2080,7 @@
     _initP = null;
     fenCache.clear();
     lastEngineResponse = Date.now();
-    _silentReinit = true;
-    initEngine()
-      .catch(err => console.warn('[Chess Assist] restart failed:', err))
-      .finally(() => { _silentReinit = false; });
+    initEngine().catch(err => console.warn('[Chess Assist] restart failed:', err));
   }
   let lastEngineResponse = Date.now();
   setInterval(() => {
@@ -2068,36 +2095,30 @@
   function uciSend(cmd) {
     if (sfWorker) sfWorker.postMessage(cmd);
   }
-  function uciCommand(cmd, waitFor) {
+  function uciCommand(cmd, waitFor, timeoutMs) {
     return new Promise((resolve, reject) => {
       const worker = sfWorker;
       if (!worker) {
         reject(new Error('no worker'));
         return;
       }
-      const cleanup = () => {
-        try { worker.removeEventListener('message', handler); } catch {}
-        try { worker.removeEventListener('error', errHandler); } catch {}
-      };
       const timeout = setTimeout(() => {
-        cleanup();
+        try {
+          worker.removeEventListener('message', handler);
+        } catch {}
         reject(new Error('UCI timeout waiting for ' + waitFor));
-      }, 25000);
+      }, timeoutMs || 6e4);
       const handler = e => {
         lastEngineResponse = Date.now();
         if (typeof e.data === 'string' && e.data.startsWith(waitFor)) {
           clearTimeout(timeout);
-          cleanup();
+          try {
+            worker.removeEventListener('message', handler);
+          } catch {}
           resolve(e.data);
         }
       };
-      const errHandler = ev => {
-        clearTimeout(timeout);
-        cleanup();
-        reject(new Error('worker error during ' + waitFor + ': ' + ((ev && ev.message) || ev)));
-      };
       worker.addEventListener('message', handler);
-      worker.addEventListener('error', errHandler);
       worker.postMessage(cmd);
     });
   }
@@ -2106,29 +2127,8 @@
   let activeSearchHandler = null;
   let activeSearchTimeout = null;
   let activeSearchResolve = null;
-  const _crashedFens = new Set();
-  function _isValidFen(fen) {
-    if (typeof fen !== 'string') return false;
-    const parts = fen.trim().split(/\s+/);
-    if (parts.length < 2) return false;
-    const [pos, side] = parts;
-    if (side !== 'w' && side !== 'b') return false;
-    const ranks = pos.split('/');
-    if (ranks.length !== 8) return false;
-    for (const r of ranks) {
-      let sum = 0;
-      for (const c of r) {
-        if (c >= '1' && c <= '8') sum += +c;
-        else if ('pnbrqkPNBRQK'.includes(c)) sum += 1;
-        else return false;
-      }
-      if (sum !== 8) return false;
-    }
-    return true;
-  }
   function queryLocal(fen, depth, multiPV) {
     multiPV = multiPV || 1;
-    if (!_isValidFen(fen) || _crashedFens.has(fen)) return Promise.resolve([]);
     const cached = getCachedEval(fen, multiPV);
     if (cached) {
       const _expSide = fen.split(' ')[1];
@@ -2221,7 +2221,7 @@
         activeSearchHandler = null;
         const best = line.split(/\s+/)[1];
         if (best && best.length >= 4 && !moves[1]) moves[1] = {
-          move: best.slice(0, 5),
+          move: best.slice(0, 4),
           cp: null
         };
         let results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
@@ -2255,7 +2255,7 @@
               } else cp = parseInt(parts[1]);
             }
             moves[pvIdx] = {
-              move: mv.slice(0, 5),
+              move: mv.slice(0, 4),
               cp,
               mate
             };
@@ -2276,7 +2276,7 @@
               } else cp = parseInt(parts[1]);
             }
             moves[1] = {
-              move: mv.slice(0, 5),
+              move: mv.slice(0, 4),
               cp,
               mate
             };
