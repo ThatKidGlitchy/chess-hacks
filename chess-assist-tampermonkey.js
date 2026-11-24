@@ -1758,35 +1758,7 @@
     });
   }
   async function fetchWithProgress(url, onBytes) {
-    const TIMEOUT_MS = 60000;
-    let ctrl = null, timer = null;
-    try {
-      ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-      timer = setTimeout(() => { try { ctrl && ctrl.abort(); } catch {} }, TIMEOUT_MS);
-      const resp = await fetch(url, ctrl ? { signal: ctrl.signal } : undefined);
-      if (!resp.ok) throw new Error('HTTP ' + resp.status + ' ' + url);
-      if (!resp.body || !resp.body.getReader) { const ab = await resp.arrayBuffer(); clearTimeout(timer); return ab; }
-      const total = Number(resp.headers.get('Content-Length')) || 0;
-      const reader = resp.body.getReader();
-      const chunks = [];
-      let received = 0;
-      while (true) {
-        const {done, value} = await reader.read();
-        if (done) break;
-        chunks.push(value);
-        received += value.length;
-        try { onBytes(received, total); } catch {}
-      }
-      clearTimeout(timer);
-      const buf = new Uint8Array(received);
-      let off = 0;
-      for (const c of chunks) { buf.set(c, off); off += c.length; }
-      return buf.buffer;
-    } catch (e) {
-      clearTimeout(timer);
-      console.warn('[Chess Assist] fetch stream failed, falling back to XHR:', e && e.message);
-      return xhrArrayBuffer(url, onBytes, TIMEOUT_MS);
-    }
+    return xhrArrayBuffer(url, onBytes, 60000);
   }
   let _initP = null;
   let _silentReinit = false;
@@ -2063,23 +2035,29 @@
         reject(new Error('no worker'));
         return;
       }
+      const cleanup = () => {
+        try { worker.removeEventListener('message', handler); } catch {}
+        try { worker.removeEventListener('error', errHandler); } catch {}
+      };
       const timeout = setTimeout(() => {
-        try {
-          worker.removeEventListener('message', handler);
-        } catch {}
+        cleanup();
         reject(new Error('UCI timeout waiting for ' + waitFor));
-      }, 1e4);
+      }, 25000);
       const handler = e => {
         lastEngineResponse = Date.now();
         if (typeof e.data === 'string' && e.data.startsWith(waitFor)) {
           clearTimeout(timeout);
-          try {
-            worker.removeEventListener('message', handler);
-          } catch {}
+          cleanup();
           resolve(e.data);
         }
       };
+      const errHandler = ev => {
+        clearTimeout(timeout);
+        cleanup();
+        reject(new Error('worker error during ' + waitFor + ': ' + ((ev && ev.message) || ev)));
+      };
       worker.addEventListener('message', handler);
+      worker.addEventListener('error', errHandler);
       worker.postMessage(cmd);
     });
   }
