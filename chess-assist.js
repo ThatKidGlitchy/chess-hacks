@@ -1588,6 +1588,7 @@
     return parts[0] + ' ' + (parts[1] || 'w');
   }
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
+  let sfWorkerUrl = null;
 
   const ENGINE_HASHES = {
     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js': 'ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a',
@@ -1787,9 +1788,9 @@
         const jsCode = (new TextDecoder).decode(jsBuf);
         _show(null, 100);
         const boot = 'try{if(typeof SharedArrayBuffer==="undefined"){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}else{try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+err);});}catch(err){self.postMessage("info string Stockfish boot error: "+err);}}}};';
-        sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], {
-          type: 'application/javascript'
-        })));
+        try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
+        sfWorkerUrl = URL.createObjectURL(new Blob([ boot ], { type: 'application/javascript' }));
+        sfWorker = new Worker(sfWorkerUrl);
         sfWorker.postMessage({
           type: 'init',
           wasm: wasmBuf,
@@ -1803,9 +1804,9 @@
         const code = (new TextDecoder).decode(buf);
         _show(null, 100);
         const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
-        sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
-          type: 'application/javascript'
-        })));
+        try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
+        sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'application/javascript' }));
+        sfWorker = new Worker(sfWorkerUrl);
       }
       await uciCommand('uci', 'uciok');
       uciSend('setoption name Hash value ' + (engine.hash || 64));
@@ -1829,9 +1830,9 @@
           await verifyEngineBytes(engine.asmUrl, asmBuf);
           const code = (new TextDecoder).decode(asmBuf);
           const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
-          sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
-            type: 'application/javascript'
-          })));
+          try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
+          sfWorkerUrl = URL.createObjectURL(new Blob([ jsPrefix + code ], { type: 'application/javascript' }));
+          sfWorker = new Worker(sfWorkerUrl);
           await uciCommand('uci', 'uciok');
           uciSend('setoption name Hash value ' + (engine.hash || 64));
           sfCurrentMultiPV = 1;
@@ -1877,6 +1878,8 @@
         sfWorker.terminate();
       }
     } catch {}
+    try { if (sfWorkerUrl) URL.revokeObjectURL(sfWorkerUrl); } catch {}
+    sfWorkerUrl = null;
     sfWorker = null;
     sfReady = false;
     _initP = null;
@@ -1911,6 +1914,7 @@
     detection.lastMyEvalCp = null;
     detection.lastMyEvalFen = null;
     applyDepthCap();
+    try { await new Promise(r => setTimeout(r, 80)); } catch {}
     try {
       await initEngine();
     } catch (e) {
