@@ -1746,7 +1746,27 @@
     });
   }
   async function fetchWithProgress(url, onBytes) {
-    return xhrArrayBuffer(url, onBytes, 60000);
+    const mirrors = [url];
+    if (/cdn\.jsdelivr\.net/.test(url)) {
+      mirrors.push(url.replace('cdn.jsdelivr.net', 'fastly.jsdelivr.net'));
+    }
+    const rawMatch = url.match(/^https:\/\/(?:cdn|fastly)\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+?)(\?.*)?$/);
+    if (rawMatch) {
+      const [, owner, repo, ref, path] = rawMatch;
+      mirrors.push('https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + ref + '/' + path);
+    }
+    let lastErr;
+    for (let i = 0; i < mirrors.length; i++) {
+      const m = mirrors[i];
+      try {
+        if (i > 0) console.warn('[Chess Assist] retrying from mirror ' + (i + 1) + '/' + mirrors.length + ':', m);
+        return await xhrArrayBuffer(m, onBytes, 60000);
+      } catch (e) {
+        lastErr = e;
+        console.warn('[Chess Assist] mirror ' + (i + 1) + ' failed:', m, (e && e.message) || e);
+      }
+    }
+    throw lastErr || new Error('all mirrors failed for ' + url);
   }
   let _initP = null;
   let _silentReinit = false;
