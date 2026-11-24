@@ -1728,32 +1728,23 @@
     if (/cdn\.jsdelivr\.net/.test(url)) {
       mirrors.push(url.replace('cdn.jsdelivr.net', 'fastly.jsdelivr.net'));
     }
-    const rawMatch = url.match(/^https:\/\/(?:cdn|fastly)\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+?)(\?.*)?$/);
+    const rawMatch = url.match(/^https:\/\/(?:cdn|fastly)\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+)$/);
     if (rawMatch) {
       const [, owner, repo, ref, path] = rawMatch;
-      mirrors.push('https://raw.githubusercontent.com/' + owner + '/' + repo + '/' + ref + '/' + path);
+      mirrors.push(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`);
     }
-    // Race all mirrors in parallel; first to succeed wins. Progress only reports
-    // from the eventual winner so the % bar doesn't flicker between mirrors.
-    let winnerIdx = -1;
-    const racers = mirrors.map((m, i) => {
-      const localOnBytes = (r, t) => {
-        if (winnerIdx === -1 || winnerIdx === i) {
-          try { onBytes(r, t); } catch {}
-        }
-      };
-      return fetchWithProgress(m, localOnBytes).then(buf => {
-        if (winnerIdx === -1) {
-          winnerIdx = i;
-          if (i > 0) console.warn('[Chess Assist] mirror ' + (i + 1) + '/' + mirrors.length + ' won:', m);
-        }
-        return buf;
-      }, err => {
-        console.warn('[Chess Assist] mirror ' + (i + 1) + ' failed:', m, (err && err.message) || err);
-        throw err;
-      });
-    });
-    return Promise.any(racers);
+    let lastErr;
+    for (let i = 0; i < mirrors.length; i++) {
+      const mirrorUrl = mirrors[i];
+      try {
+        if (i > 0) console.warn('[Chess Assist] retrying from mirror ' + (i + 1) + '/' + mirrors.length + ':', mirrorUrl);
+        return await fetchWithProgress(mirrorUrl, onBytes);
+      } catch (e) {
+        lastErr = e;
+        console.warn('[Chess Assist] mirror ' + (i + 1) + ' failed:', mirrorUrl, (e && e.message) || e);
+      }
+    }
+    throw lastErr || new Error('all mirrors failed for ' + url);
   }
 
   async function fetchWithProgress(url, onBytes) {
