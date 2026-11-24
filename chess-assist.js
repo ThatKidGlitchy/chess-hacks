@@ -4640,7 +4640,17 @@
   const colorReset = panel.querySelector('#ch-theme-color-reset');
   if (colorReset) colorReset.onclick = () => applyAccentColor(DEFAULT_ACCENT);
   const colorChange = panel.querySelector('#ch-theme-color-change');
-  if (colorChange && colorInput) colorChange.onclick = () => { try { colorInput.click(); } catch {} };
+  if (colorChange && colorInput) {
+    colorChange.onclick = (ev) => {
+      try { ev.preventDefault(); } catch {}
+      try { ev.stopPropagation(); } catch {}
+      try {
+        if (typeof colorInput.showPicker === 'function') { colorInput.showPicker(); return; }
+      } catch {}
+      try { colorInput.focus(); } catch {}
+      try { colorInput.click(); } catch {}
+    };
+  }
   const colorHex = panel.querySelector('#ch-theme-color-hex');
   if (colorHex) {
     colorHex.value = currentAccentColor().toUpperCase();
