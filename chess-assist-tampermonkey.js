@@ -14,6 +14,161 @@
 (() => {
   if (window.__chessHelper) return console.warn('already loaded');
   window.__chessHelper = true;
+
+  const THEME_STORAGE = 'ch-ui-accent';
+  const DEFAULT_ACCENT = '#81b64c';
+  function _hexToRgb(hex) {
+    const s = String(hex || '').replace('#', '');
+    if (s.length !== 6) return { r: 129, g: 182, b: 76 };
+    return { r: parseInt(s.slice(0, 2), 16), g: parseInt(s.slice(2, 4), 16), b: parseInt(s.slice(4, 6), 16) };
+  }
+  function _toHex(n) { return Math.max(0, Math.min(255, Math.round(n))).toString(16).padStart(2, '0'); }
+  function _lighten(hex, amount) {
+    const { r, g, b } = _hexToRgb(hex);
+    return '#' + _toHex(r + 255 * amount) + _toHex(g + 255 * amount) + _toHex(b + 255 * amount);
+  }
+  function applyAccentColor(hex) {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) hex = DEFAULT_ACCENT;
+    const root = document.documentElement.style;
+    root.setProperty('--ch-accent', hex);
+    root.setProperty('--ch-accent-hover', _lighten(hex, 0.12));
+    try { localStorage.setItem(THEME_STORAGE, hex); } catch (_) {}
+    const input = document.getElementById('ch-theme-color');
+    if (input && input.value.toLowerCase() !== hex.toLowerCase()) input.value = hex;
+    const hexLabel = document.getElementById('ch-theme-color-hex');
+    if (hexLabel) {
+      const v = hex.toUpperCase();
+      if (hexLabel.tagName === 'INPUT') {
+        if (document.activeElement !== hexLabel) hexLabel.value = v;
+      } else {
+        hexLabel.textContent = v;
+      }
+    }
+  }
+  function currentAccentColor() {
+    try { return localStorage.getItem(THEME_STORAGE) || DEFAULT_ACCENT; } catch (_) { return DEFAULT_ACCENT; }
+  }
+
+  const CHESSHELPER_BASES = [
+    'https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/chesshelper/themes/',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/chesshelper/themes/',
+    'https://raw.githubusercontent.com/ThatKidGlitchy/chess-engines/main/chesshelper/themes/'
+  ];
+  const CHESSHELPER_STORAGE = 'ch-chesshelper-theme';
+  const CHESSHELPER_THEMES = [
+    { id: '',                    name: 'None',         swatch: 'linear-gradient(135deg,rgba(255,255,255,0.08),rgba(255,255,255,0.02))', label: 'rgba(255,255,255,0.55)' },
+    { id: 'amoled',              name: 'AMOLED',       swatch: '#000000', label: '#ffffff' },
+    { id: 'chains',              name: 'Chains',       swatch: 'linear-gradient(135deg,#1a1a1f,#2a2a30)', label: '#dcd6c8' },
+    { id: 'frutiger_aero',       name: 'Frutiger Aero',swatch: 'linear-gradient(135deg,#9bd7ff,#3bb3ff)', label: '#0b2f4a' },
+    { id: 'frutiger_aero_dimmed',name: 'Aero Dimmed',  swatch: 'linear-gradient(135deg,#4a6b8a,#2f4a68)', label: '#e8f1ff' },
+    { id: 'frutiger_aero_green', name: 'Aero Green',   swatch: 'linear-gradient(135deg,#8bc34a,#4d8c2f)', label: '#0f2a08' },
+    { id: 'glitter',             name: 'Glitter',      swatch: 'linear-gradient(135deg,#ff69b4,#c0407a)', label: '#ffffff' },
+    { id: 'greener_green',       name: 'Greener Green',swatch: '#2d5016', label: '#eaffd1' },
+    { id: 'kittens',             name: 'Kittens',      swatch: 'linear-gradient(135deg,#ffb6c1,#ff8fa8)', label: '#3b1a24' },
+    { id: 'night_owl',           name: 'Night Owl',    swatch: '#011627', label: '#7fdbca' },
+    { id: 'pink',                name: 'Pink',         swatch: '#ff69b4', label: '#4a0f2a' },
+    { id: 'purple_dark',         name: 'Purple Dark',  swatch: 'linear-gradient(135deg,#2d1b4e,#4b2a7a)', label: '#e8d5ff' },
+    { id: 'srl',                 name: 'SRL',          swatch: '#c41e3a', label: '#ffffff' },
+    { id: 'ws_type',             name: 'WS Type',      swatch: '#f5e6d3', label: '#3b2a18' },
+    { id: 'yellow',              name: 'Yellow',       swatch: '#ffd700', label: '#3b2a00' }
+  ];
+  const CHESSHELPER_CACHE = Object.create(null);
+  let _chesshelperStyleEl = null;
+  function _chesshelperStyleNode() {
+    if (_chesshelperStyleEl && _chesshelperStyleEl.isConnected) return _chesshelperStyleEl;
+    _chesshelperStyleEl = document.getElementById('ch-chesshelper-theme-style');
+    if (!_chesshelperStyleEl) {
+      _chesshelperStyleEl = document.createElement('style');
+      _chesshelperStyleEl.id = 'ch-chesshelper-theme-style';
+      (document.head || document.documentElement).appendChild(_chesshelperStyleEl);
+    }
+    return _chesshelperStyleEl;
+  }
+  function clearChessHelperTheme() {
+    const el = document.getElementById('ch-chesshelper-theme-style');
+    if (el) el.textContent = '';
+    try { localStorage.removeItem(CHESSHELPER_STORAGE); } catch (_) {}
+  }
+  async function applyChessHelperTheme(id) {
+    if (!id) { clearChessHelperTheme(); return; }
+    const match = CHESSHELPER_THEMES.find(t => t.id === id);
+    if (!match) return;
+    try { localStorage.setItem(CHESSHELPER_STORAGE, id); } catch (_) {}
+    let css = CHESSHELPER_CACHE[id];
+    if (!css) {
+      let lastErr = null;
+      for (const base of CHESSHELPER_BASES) {
+        try {
+          const r = await fetch(base + id + '.css', { cache: 'no-cache' });
+          if (!r.ok) { lastErr = new Error('http ' + r.status + ' from ' + base); continue; }
+          css = await r.text();
+          CHESSHELPER_CACHE[id] = css;
+          break;
+        } catch (e) { lastErr = e; }
+      }
+      if (!css) {
+        console.warn('[chess-assist] theme fetch failed:', id, lastErr);
+        return;
+      }
+    }
+    const scopedCss = css.replace(
+      /\*\s*\{\s*font-weight\s*:\s*400\s*!important\s*;?\s*\}/g,
+      ':not(#chess-helper-root,#chess-helper-root *){font-weight:400!important}'
+    );
+    _chesshelperStyleNode().textContent = scopedCss;
+  }
+  function currentChessHelperTheme() {
+    try { return localStorage.getItem(CHESSHELPER_STORAGE) || ''; } catch (_) { return ''; }
+  }
+
+  const AD_BLOCK_STORAGE = 'ch-ad-block';
+  const AD_BLOCK_RULES = [
+    'iframe[src*="googlesyndication"]',
+    'iframe[src*="doubleclick.net"]',
+    'iframe[src*="googleadservices"]',
+    'iframe[src*="googletagservices"]',
+    'iframe[id^="google_ads"]',
+    'iframe[id^="aswift_"]',
+    'ins.adsbygoogle',
+    '[data-google-query-id]',
+    '.ad-container', '.ad-unit', '.ad-slot', '.ad-wrap', '.ad-wrapper',
+    '[class*="advertisement"]',
+    '[class*="ad-banner"]', '[id*="ad-banner"]',
+    '[class*="ad-slot"]', '[class*="ad-placement"]',
+    '.sidebar-ad-component', '.sidebar-ads',
+    '.board-right-ad-component', '.board-left-ad-component',
+    '.above-board-ad-component', '.below-board-ad-component',
+    '.vertical-feed-ad-component',
+    '.game-over-ad-component', '.game-over-ad-sidecar-component',
+    '[class*="cdn-ads"]', '[class*="dfp-ad"]',
+    '[class*="remove-ads"]', '[class*="removeAds"]',
+    '[class*="no-ads"]', '[class*="noAds"]',
+    '.remove-ads-button', '.remove-ads-link', '.remove-ads-component',
+    '.no-ads-trigger', '.no-ads-component',
+    'a[href*="noads"]', 'a[href*="no-ads"]', 'a[href*="remove-ads"]',
+    '[data-remove-ads]'
+  ];
+  let _adBlockStyleEl = null;
+  function applyAdBlock(enabled) {
+    try { localStorage.setItem(AD_BLOCK_STORAGE, enabled ? '1' : '0'); } catch (_) {}
+    if (!_adBlockStyleEl || !_adBlockStyleEl.isConnected) {
+      _adBlockStyleEl = document.getElementById('ch-ad-block-style');
+      if (!_adBlockStyleEl) {
+        _adBlockStyleEl = document.createElement('style');
+        _adBlockStyleEl.id = 'ch-ad-block-style';
+        (document.head || document.documentElement).appendChild(_adBlockStyleEl);
+      }
+    }
+    _adBlockStyleEl.textContent = enabled
+      ? AD_BLOCK_RULES.join(',\n') + ' { display: none !important; visibility: hidden !important; width: 0 !important; height: 0 !important; pointer-events: none !important; }'
+      : '';
+  }
+  function currentAdBlock() {
+    try { return localStorage.getItem(AD_BLOCK_STORAGE) === '1'; } catch (_) { return false; }
+  }
+
+
+
   if (!document.querySelector('link[data-ch-font]')) {
     const fontLink = document.createElement('link');
     fontLink.rel = 'stylesheet';
@@ -24,6 +179,51 @@
   const style = document.createElement('style');
   style.textContent = `
     :root { --ch-accent:#81b64c; --ch-accent-hover:#a3d160; --ch-bg:rgba(20,20,23,0.75); --ch-border:rgba(255,255,255,0.1); --ch-radius:20px; --ch-font:'Outfit',system-ui,sans-serif; }
+    /* Host-page CSS reset — ChessKid's Aurora theme and some chess.com variants put
+     * thick grey outlines / box-shadows on focusable elements that leak into our panel.
+     * Nuke every outline inside our UI and strip focus box-shadow on form controls. */
+    #chess-helper-panel, #chess-helper-wrap, #chess-helper-bubble,
+    #chess-helper-panel *, #chess-helper-wrap *, #chess-helper-bubble *,
+    #chess-helper-panel *:focus, #chess-helper-panel *:focus-visible, #chess-helper-panel *:focus-within,
+    #chess-helper-wrap *:focus, #chess-helper-wrap *:focus-visible, #chess-helper-wrap *:focus-within {
+      outline: 0 none transparent !important;
+    }
+    #chess-helper-panel input:focus, #chess-helper-panel input:focus-visible,
+    #chess-helper-panel button:focus, #chess-helper-panel button:focus-visible,
+    #chess-helper-panel select:focus, #chess-helper-panel select:focus-visible,
+    #chess-helper-panel textarea:focus, #chess-helper-panel textarea:focus-visible,
+    #chess-helper-panel label:focus, #chess-helper-panel label:focus-visible {
+      box-shadow: none !important;
+    }
+    /* ChessKid's Aurora theme has a much lighter background than chess.com, so the
+     * panel's 85%-opacity backdrop reads as noticeably transparent there. Bump to
+     * near-opaque on ChessKid only; chess.com keeps its original glass effect. */
+    html.aurora-theme #chess-helper-panel, body.chesskid-helper #chess-helper-panel {
+      background: rgba(18, 18, 20, 0.97) !important;
+    }
+    /* Dropdown arrow — some host themes (ChessKid Aurora, chess.com variants) strip the
+     * native select arrow via appearance:none. Paint our own as an SVG background so
+     * the arrow is always visible regardless of the host's reset. */
+    #chess-helper-panel select, #chess-helper-wrap select, #ch-lang-backdrop select {
+      -webkit-appearance: none !important; appearance: none !important;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' stroke='white' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/></svg>") !important;
+      background-repeat: no-repeat !important;
+      background-position: right 10px center !important;
+      padding-right: 26px !important;
+    }
+    .ch-color-picker-row { display:flex; align-items:center; gap:8px; margin-top:2px; }
+    .ch-color-input { appearance:none; -webkit-appearance:none; width:26px; height:26px; padding:0; border:2px solid rgba(255,255,255,0.15); border-radius:50%; background:transparent; cursor:pointer; overflow:hidden; transition:all 0.15s; flex:0 0 auto; }
+    .ch-color-input:hover { border-color:rgba(255,255,255,0.35); transform:scale(1.05); }
+    .ch-color-input::-webkit-color-swatch-wrapper { padding:0; border-radius:50%; }
+    .ch-color-input::-webkit-color-swatch { border:none; border-radius:50%; }
+    .ch-color-input::-moz-color-swatch { border:none; border-radius:50%; }
+    .ch-color-picker-info { flex:1; display:flex; align-items:center; }
+    .ch-color-picker-hex { font-size:11px; color:rgba(255,255,255,0.7); font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; letter-spacing:0.5px; font-weight:600; }
+    input.ch-color-picker-hex { background:transparent; border:none; outline:none; padding:0; width:72px; text-transform:uppercase; }
+    input.ch-color-picker-hex:focus { color:#fff; }
+    .ch-color-reset { padding:3px 9px; font-size:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.05); color:rgba(255,255,255,0.65); cursor:pointer; font-family:var(--ch-font); font-weight:600; transition:all 0.15s; }
+    .ch-color-reset:hover { background:rgba(255,255,255,0.1); color:#fff; }
+    .ch-page-hint { font-size:8px !important; color:rgba(255,255,255,0.4) !important; text-align:center !important; padding:0 0 2px !important; font-style:italic !important; line-height:1.25 !important; letter-spacing:0.2px !important; margin:0 !important; }
     #chess-helper-root { position:fixed; left:0; top:0; width:0; height:0; overflow:visible; pointer-events:none !important; z-index:99999; font-family:var(--ch-font); }
     #chess-helper-bubble { position:fixed; width:52px; height:52px; background:var(--ch-bg); backdrop-filter:blur(20px); border:1px solid var(--ch-border); border-radius:50%; box-shadow:0 10px 40px -10px #0008; display:flex; align-items:center; justify-content:center; cursor:grab; color:#fff; pointer-events:auto; z-index:100000; user-select:none; transition:transform .2s; }
     #chess-helper-bubble:hover { transform:scale(1.1); }
@@ -31,7 +231,7 @@
     #chess-helper-wrap { position:fixed; visibility:hidden; display:flex; align-items:stretch; gap:8px; opacity:0; transform:scale(0.9); transition:opacity .25s, transform .3s; pointer-events:none; }
     #chess-helper-wrap.visible { visibility:visible; opacity:1; transform:scale(1); pointer-events:auto; }
     #chess-helper-wrap:not(.visible), #chess-helper-wrap:not(.visible) * { pointer-events:none !important; }
-    #chess-helper-panel { width:280px; background:rgba(18,18,20,0.85); backdrop-filter:blur(24px); border:1px solid var(--ch-border); border-radius:var(--ch-radius); padding:20px 20px 4px; display:flex; flex-direction:column; gap:14px; box-shadow:0 20px 60px #0009; pointer-events:auto; }
+    #chess-helper-panel { width:280px; background:rgba(18,18,20,0.85); backdrop-filter:blur(24px); border:1px solid var(--ch-border); border-radius:var(--ch-radius); padding:20px 20px 4px; display:flex; flex-direction:column; gap:14px; box-shadow:0 20px 60px #0009; pointer-events:auto; font-family:var(--ch-font); color:#fff; }
     #ch-eval-bar { width:32px; border-radius:14px; overflow:hidden; background:#000; box-shadow:0 10px 40px -10px #0008; position:relative; pointer-events:auto; min-height:200px; }
     #ch-eval-white { position:absolute; bottom:0; left:0; right:0; background:#fff; transition:height .6s ease; height:50%; }
     .ch-eval-pct { position:absolute; width:100%; text-align:center; font-size:10px; font-weight:700; font-family:var(--ch-font); z-index:2; left:0; }
@@ -65,6 +265,59 @@
     .ch-keybind:hover { color:#fff; background:rgba(255,255,255,0.15); }
     .ch-keybind.recording { color:var(--ch-accent); background:rgba(129,182,76,0.15); animation:ch-pulse 1s infinite; }
     @keyframes ch-pulse { 0%,100%{opacity:1} 50%{opacity:0.5} }
+    .ch-promo-ring { position:relative; box-shadow:0 0 0 3px var(--ch-accent), 0 0 14px 3px var(--ch-accent); border-radius:10px; animation:ch-promo-ring-pulse 1s ease-in-out infinite; z-index:3; pointer-events:auto; }
+    @keyframes ch-promo-ring-pulse { 0%,100% { box-shadow:0 0 0 3px var(--ch-accent), 0 0 14px 3px var(--ch-accent); } 50% { box-shadow:0 0 0 5px var(--ch-accent), 0 0 22px 5px var(--ch-accent); } }
+    .ch-ai-typing { display:inline-flex; gap:4px; align-items:flex-end; padding:2px 0; }
+    .ch-ai-typing span { display:block; width:6px; height:6px; background:currentColor; border-radius:50%; opacity:0.35; animation: ch-ai-bounce 1.3s infinite ease-in-out both; }
+    .ch-ai-typing span:nth-child(2) { animation-delay: 0.18s; }
+    .ch-ai-typing span:nth-child(3) { animation-delay: 0.36s; }
+    @keyframes ch-ai-bounce { 0%, 70%, 100% { transform: translateY(0) scale(1); opacity:0.35; } 35% { transform: translateY(-5px) scale(1.15); opacity:1; } }
+    #ch-ai-clear { padding:5px 12px; border-radius:8px; border:1px solid rgba(255,255,255,0.12); background:rgba(255,255,255,0.06); color:rgba(255,255,255,0.85); font-family:var(--ch-font); font-size:11px; font-weight:600; cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; gap:4px; }
+    #ch-ai-clear:hover { background:rgba(255,80,80,0.18); border-color:rgba(255,80,80,0.35); color:#fff; }
+    #ch-ai-clear svg { width:11px; height:11px; }
+    .ch-ai-suggest { align-self:flex-start; max-width:92%; padding:7px 11px; border-radius:10px; background:rgba(129,182,76,0.12); border:1px solid rgba(129,182,76,0.35); color:#c8e6a0; font-size:12px; cursor:pointer; transition:all .15s; display:inline-flex; align-items:center; gap:6px; font-family:var(--ch-font); text-align:left; line-height:1.35; }
+    .ch-ai-suggest:hover { background:rgba(129,182,76,0.22); border-color:rgba(129,182,76,0.6); color:#fff; transform:translateY(-1px); }
+    .ch-ai-suggest:active { transform:translateY(0); }
+    .ch-ai-suggest-icon { font-size:13px; opacity:0.85; }
+    /* Groq settings card */
+    .ch-ai-card { padding:9px 10px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.06); border-radius:8px; margin-bottom:8px; font-family:var(--ch-font); box-sizing:border-box; }
+    .ch-ai-card-head { display:flex; align-items:center; justify-content:space-between; gap:6px; font-size:11px; color:rgba(255,255,255,0.7); font-weight:600; margin-bottom:6px; min-width:0; }
+    .ch-ai-card-head-title { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:flex; align-items:center; gap:5px; }
+    .ch-ai-card-head-link { color:var(--ch-accent); text-decoration:none; font-size:10px; font-weight:600; white-space:nowrap; flex-shrink:0; }
+    .ch-ai-card-head-link:hover { text-decoration:underline; }
+    .ch-ai-input-row { display:flex; gap:4px; align-items:stretch; }
+    .ch-ai-input-row input { flex:1; min-width:0; padding:6px 10px; background:#1a1a1c; color:#fff; border:1px solid rgba(255,255,255,0.08); border-radius:6px; font-family:var(--ch-font); font-size:11px; outline:none; letter-spacing:0.5px; box-sizing:border-box; }
+    .ch-ai-input-row input:focus { border-color:var(--ch-accent); }
+    .ch-ai-input-row button { padding:5px 12px; font-size:11px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:var(--ch-accent); color:#121212; font-family:var(--ch-font); font-weight:600; cursor:pointer; flex-shrink:0; }
+    .ch-ai-input-row button:hover { background:var(--ch-accent-hover); }
+    /* Saved compact banner */
+    .ch-ai-saved { display:flex; align-items:center; gap:7px; }
+    .ch-ai-saved-dot { width:7px; height:7px; border-radius:50%; background:var(--ch-accent); flex-shrink:0; box-shadow:0 0 6px var(--ch-accent); animation:ch-pulse 2s infinite; }
+    .ch-ai-saved-text { flex:1; min-width:0; font-size:11px; font-weight:600; color:rgba(255,255,255,0.8); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+    .ch-ai-gear { padding:3px 7px; background:transparent; border:1px solid rgba(255,255,255,0.1); border-radius:6px; color:rgba(255,255,255,0.6); cursor:pointer; font-size:13px; line-height:1; display:inline-flex; align-items:center; justify-content:center; width:26px; height:24px; flex-shrink:0; transition:all .15s; }
+    .ch-ai-gear:hover { background:rgba(255,255,255,0.08); color:#fff; border-color:rgba(255,255,255,0.2); }
+    .ch-ai-gear svg { width:12px; height:12px; }
+    /* Floating gear (only visible when a key is saved) */
+    .ch-ai-floating-gear { width:26px; height:26px; padding:0; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.1); border-radius:7px; color:rgba(255,255,255,0.65); cursor:pointer; display:inline-flex; align-items:center; justify-content:center; transition:all .15s; flex-shrink:0; }
+    .ch-ai-floating-gear:hover { color:#fff; background:rgba(255,255,255,0.1); border-color:rgba(255,255,255,0.2); }
+    .ch-ai-floating-gear svg { width:13px; height:13px; }
+    /* Settings panel (overlay) */
+    .ch-ai-settings { position:absolute; inset:0; background:rgba(15,15,17,0.98); border-radius:10px; padding:10px 12px; z-index:50; overflow-y:auto; border:1px solid rgba(255,255,255,0.08); box-sizing:border-box; display:flex; flex-direction:column; gap:10px; }
+    .ch-ai-settings-head { display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,0.08); padding-bottom:7px; }
+    .ch-ai-settings-head h4 { margin:0; font-size:12px; font-weight:700; color:#fff; letter-spacing:0.3px; }
+    .ch-ai-settings-close { background:transparent; border:none; color:rgba(255,255,255,0.5); cursor:pointer; font-size:16px; line-height:1; padding:0 4px; }
+    .ch-ai-settings-close:hover { color:#fff; }
+    .ch-ai-setting-section { font-size:11px; }
+    .ch-ai-setting-section .label { font-size:10px; color:rgba(255,255,255,0.4); text-transform:uppercase; letter-spacing:0.8px; margin-bottom:3px; }
+    .ch-ai-setting-section .value { color:#fff; font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-size:11px; word-break:break-all; }
+    .ch-ai-usage-row { display:flex; justify-content:space-between; padding:3px 0; font-size:11px; color:rgba(255,255,255,0.75); }
+    .ch-ai-usage-row .n { font-variant-numeric:tabular-nums; color:#fff; font-weight:600; }
+    .ch-ai-usage-bar { height:3px; background:rgba(255,255,255,0.08); border-radius:2px; overflow:hidden; margin-top:3px; }
+    .ch-ai-usage-bar div { height:100%; background:var(--ch-accent); transition:width 0.3s; }
+    .ch-ai-settings-actions { display:flex; gap:4px; }
+    .ch-ai-settings-actions button { flex:1; padding:5px 8px; font-size:10px; border-radius:6px; border:1px solid rgba(255,255,255,0.1); background:rgba(255,255,255,0.05); color:#fff; font-family:var(--ch-font); font-weight:600; cursor:pointer; }
+    .ch-ai-settings-actions button:hover { background:rgba(255,255,255,0.1); }
+    .ch-ai-settings-actions button.danger:hover { background:rgba(255,80,80,0.18); border-color:rgba(255,80,80,0.35); }
     .ch-info { width:16px; height:16px; border-radius:50%; border:1.5px solid rgba(255,255,255,0.3); color:rgba(255,255,255,0.4); font-size:10px; font-weight:700; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; flex-shrink:0; transition:.2s; font-style:italic; font-family:serif; line-height:1; }
     .ch-info:hover, .ch-info.active { border-color:var(--ch-accent); color:var(--ch-accent); }
     .ch-tooltip { display:none; background:rgba(10,10,12,0.95); border:1px solid var(--ch-border); border-radius:10px; padding:8px 12px; font-size:11px; color:rgba(255,255,255,0.7); line-height:1.5; margin-top:4px; }
@@ -79,13 +332,23 @@
     .ch-pager-dot { width:6px; height:6px; border-radius:50%; background:rgba(255,255,255,0.2); cursor:pointer; transition:.15s; }
     .ch-pager-dot.active { background:var(--ch-accent); width:16px; border-radius:3px; }
     .ch-pager-count { font-size:11px; font-weight:600; color:rgba(255,255,255,0.5); font-variant-numeric:tabular-nums; min-width:28px; text-align:center; }
-    .ch-gameplay-page, .ch-skins-page { display:none; flex-direction:column; gap:14px; font-family:var(--ch-font); }
-    .ch-gameplay-page.active, .ch-skins-page.active { display:flex; }
+    .ch-gameplay-page, .ch-skins-page, .ch-settings-page, .ch-detection-page { display:none; flex-direction:column; gap:14px; font-family:var(--ch-font); }
+    .ch-gameplay-page.active, .ch-skins-page.active, .ch-settings-page.active, .ch-detection-page.active { display:flex; }
+    /* ChessKid green-arrow flash guard. The attribute on <body> is kept in sync
+     * with the live fen via rAF, so even if a race path appends the SVG during
+     * opp's turn, the browser never paints it visible — attribute is correct at
+     * paint time (rAF runs before the paint phase every frame). */
+    body:not([data-ch-my-turn="true"]) .ch-arrow-svg { visibility: hidden !important; }
     .ch-premade-tile { position:relative; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:8px; padding:8px 4px 6px; cursor:pointer; transition:.15s; display:flex; flex-direction:column; align-items:center; gap:4px; font-family:var(--ch-font); }
     .ch-premade-tile:hover { background:rgba(255,255,255,0.1); border-color:var(--ch-accent); }
     .ch-premade-tile.active { background:rgba(129,182,76,0.15); border-color:var(--ch-accent); }
     .ch-premade-tile img { width:40px; height:40px; pointer-events:none; }
     .ch-premade-tile .ch-premade-name { font-size:10px; color:rgba(255,255,255,0.7); text-align:center; line-height:1.2; word-break:break-word; font-family:var(--ch-font); }
+    .ch-themes-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; max-height:300px; overflow-y:auto; scrollbar-width:thin; scrollbar-color:rgba(255,255,255,0.2) transparent; padding-right:2px; font-family:var(--ch-font); }
+    .ch-theme-tile { position:relative; border:1px solid rgba(255,255,255,0.08); border-radius:8px; cursor:pointer; overflow:hidden; aspect-ratio:1; display:flex; align-items:flex-end; justify-content:center; padding:4px; transition:.15s; font-family:var(--ch-font); background-size:cover; background-position:center; }
+    .ch-theme-tile:hover { border-color:var(--ch-accent); transform:translateY(-1px); }
+    .ch-theme-tile.active { border-color:var(--ch-accent); box-shadow:0 0 0 2px var(--ch-accent) inset; }
+    .ch-theme-tile .ch-theme-name { font-size:10px; font-weight:600; text-align:center; line-height:1.15; padding:3px 4px; border-radius:4px; background:rgba(0,0,0,0.45); backdrop-filter:blur(2px); pointer-events:none; max-width:100%; word-break:break-word; }
     .ch-premade-empty { font-family:var(--ch-font); }
     .ch-section-head { font-size:10px; font-weight:700; color:rgba(255,255,255,0.4); letter-spacing:1.5px; text-transform:uppercase; padding:4px 0 2px; border-bottom:1px solid rgba(255,255,255,0.06); margin-bottom:2px; }
     .ch-section-head:not(:first-child) { margin-top:6px; }
@@ -137,7 +400,8 @@
     showEval: false,
     detection: true,
     voice: false,
-    streamer: false
+    streamer: false,
+    oppCoach: false
   };
 
   const LANG_INDEX = {
@@ -159,25 +423,11 @@
     ar: { _name: "العربية", langPickerTitle: "اختر لغتك", langPickerSub: "يمكنك تغيير ذلك لاحقاً في الإعدادات.", langPickerContinue: "متابعة" }
   };
   const LANG_MIRRORS = [
-    "https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/i18n/",
+    "https://raw.githubusercontent.com/ThatKidGlitchy/chess-engines/main/i18n/",
     "https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/i18n/",
-    "https://raw.githubusercontent.com/ThatKidGlitchy/chess-engines/main/i18n/"
+    "https://fastly.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/i18n/"
   ];
-  const LANG_CACHE_TTL = 24 * 60 * 60 * 1000;
-  function readCachedLang(code) {
-    try {
-      const raw = localStorage.getItem("ch-lang-cache-v2-" + code);
-      if (!raw) return null;
-      const obj = JSON.parse(raw);
-      if (!obj || !obj.data || (Date.now() - obj.t) > LANG_CACHE_TTL) return null;
-      return obj.data;
-    } catch { return null; }
-  }
-  function writeCachedLang(code, data) {
-    try { localStorage.setItem("ch-lang-cache-v2-" + code, JSON.stringify({ t: Date.now(), data })); } catch {}
-
-    try { Object.keys(localStorage).forEach(k => { if (k.startsWith("ch-lang-cache-") && !k.startsWith("ch-lang-cache-v2-")) localStorage.removeItem(k); }); } catch {}
-  }
+  try { Object.keys(localStorage).forEach(k => { if (k.startsWith("ch-lang-cache-")) localStorage.removeItem(k); }); } catch {}
   function langFetchText(url) {
     return new Promise((resolve, reject) => {
       let done = false;
@@ -220,14 +470,17 @@
     throw lastErr || new Error("all lang mirrors failed");
   }
   const _langFetches = {};
+  const _langFetched = {};
+  function _mergeLang(code, data) {
+    if (!data) return;
+    LANGS[code] = Object.assign({}, LANGS[code] || {}, data);
+  }
   function loadLang(code) {
-    if (!LANG_INDEX[code] || code === "en") return Promise.resolve(LANGS[code] || null);
-    if (LANGS[code]) return Promise.resolve(LANGS[code]);
-    const cached = readCachedLang(code);
-    if (cached) { LANGS[code] = cached; return Promise.resolve(cached); }
+    if (!LANG_INDEX[code]) return Promise.resolve(LANGS[code] || null);
+    if (_langFetched[code]) return Promise.resolve(LANGS[code] || null);
     if (_langFetches[code]) return _langFetches[code];
     _langFetches[code] = langLoadJSON(code + ".json")
-      .then(data => { if (data) { LANGS[code] = data; writeCachedLang(code, data); } return data; })
+      .then(data => { if (data) { _mergeLang(code, data); _langFetched[code] = true; } return LANGS[code] || null; })
       .catch(err => { console.warn("[Chess Assist] lang load failed for", code, err && err.message); return null; })
       .finally(() => { delete _langFetches[code]; });
     return _langFetches[code];
@@ -248,6 +501,42 @@
       _name: 'English',
       title: 'Chess Assist',
       tabGameplay: 'Gameplay', tabDetection: 'Detection', tabSkins: 'Skins', tabSettings: 'Settings',
+      adBlock: 'Block ads',
+      tipAdBlock: "Hides third-party ads on chess.com — Google ad iframes, sidebar banners, and generic ad slots. Leaves chess.com's own UI alone, including the free-trial tab and membership prompts.",
+      themesHint: 'Whole-site chess.com themes — click a tile to apply',
+      themesCredit: 'Themes by Patryk Jaworski (ChessHelper). CC BY-NC-ND 4.0.',
+      clearTheme: 'Clear theme',
+      searchThemes: 'Search themes…',
+      oppRisk: 'Opponent risk',
+      tipOppRisk: "Profiles the opponent via chess.com's public API — weighted overall and recent winrate plus percentage of high-accuracy games, with a 1.5x bump for accounts under 60 days old. Score 0-100. Auto-runs when an opponent is detected; click Check to force a refresh. Needs at least 5 recent rated games in one time class to compute.",
+      oppCheck: 'Check',
+      oppIdle: 'Waiting for opponent…',
+      oppFormat: 'Format',
+      oppOverall: 'Overall winrate',
+      oppRecent: 'Recent winrate',
+      oppHighAcc: 'High-accuracy',
+      oppAge: 'Account age',
+      oppNoDetect: 'No opponent detected',
+      oppFetching: 'Fetching {name}…',
+      oppError: 'Error: {msg}',
+      oppFresh: 'Fresh account ({days}d) · too few rated games',
+      oppFewGames: 'Not enough recent rated games (<5)',
+      oppLabelHigh: 'HIGH RISK',
+      oppLabelElevated: 'Elevated',
+      oppLabelLow: 'Low',
+      oppLabelClean: 'Clean',
+      aiClear: 'Clear',
+      feedback: 'Feedback',
+      feedbackPrompt: 'Found a bug or have a suggestion?',
+      reportFeedback: 'Let us know.',
+      tipFeedback: 'Opens a Google Form in a new tab where you can report bugs, request features, or send suggestions. Your settings and anything you type here stay local — only what you submit on the form is shared.',
+      aiOppCoach: 'Opponent Explainer',
+      tipOppCoach: "When on, the Opponent Explainer narrates your opponent's moves too — their strong plays and their mistakes — with the same engine analysis it uses on yours. Off by default so the feed stays focused on your moves.",
+      unsupTitle: 'Unsupported site',
+      unsupBody: 'Chess Assist only works on {chesscom} and {chesskid}. The script is loaded here, but the board features will do nothing on this page.',
+      unsupOk: 'Got it',
+      aiSend: 'Send',
+      aiAsk: 'Ask about the position…',
       depth: 'Depth', showArrow: 'Show best move', hiddenArrow: 'Hidden arrows', auto: 'Auto-play',
       delay: 'Move delay', eval: 'Win percent', analyze: 'Analyze once', hide: 'Hide all',
       opponent: "Opponent's best", voice: 'Voice moves', streamer: 'Streamer mode',
@@ -304,6 +593,17 @@
   function t(key) {
     const L = (currentLang && LANGS[currentLang]) || LANGS.en;
     return L[key] != null ? L[key] : (LANGS.en[key] != null ? LANGS.en[key] : key);
+  }
+  function tf(key, params) {
+    let s = t(key);
+    if (params) for (const k in params) s = s.split('{' + k + '}').join(String(params[k]));
+    return s;
+  }
+  function tp(key, pov, params) {
+    const suf = key + '_' + (pov === 'them' ? 'them' : 'me');
+    const L = (currentLang && LANGS[currentLang]) || LANGS.en;
+    const useSuf = (L[suf] != null) || (LANGS.en[suf] != null);
+    return tf(useSuf ? suf : key, params);
   }
   function setLang(lang) {
     if (!LANG_INDEX[lang]) return;
@@ -409,7 +709,8 @@
           showEval: window.chessHelper.showEval,
           detection: window.chessHelper.detection,
           voice: window.chessHelper.voice,
-          streamer: window.chessHelper.streamer
+          streamer: window.chessHelper.streamer,
+          oppCoach: window.chessHelper.oppCoach
         },
         voiceRate: VOICE_RATE,
         voiceVolume: VOICE_VOLUME,
@@ -858,6 +1159,14 @@
   }
   function getDetectionGameIdentity() {
     const pageUrl = new URL(location.href);
+    if (IS_CHESSKID) {
+      const hashMatch = (location.hash || '').match(/[?&#]g=([^&]+)/);
+      if (hashMatch) return { key: location.origin + '|ck|' + hashMatch[1], stable: true };
+      const innerBoard = document.querySelector('.chess-board__board');
+      const boardId = innerBoard?.id || '';
+      if (boardId) return { key: location.origin + '|ck|' + pageUrl.pathname + '|' + boardId, stable: true };
+      return { key: location.origin + '|ck|' + pageUrl.pathname, stable: false };
+    }
     const pathMatch = pageUrl.pathname.match(/\/game\/(?:live|daily)\/([^/]+)/i);
     const urlGameId = pathMatch?.[1] || pageUrl.searchParams.get('gameId') || pageUrl.searchParams.get('game_id');
     if (urlGameId) return {
@@ -908,10 +1217,45 @@
       localStorage.setItem(DETECTION_CACHE_KEY, JSON.stringify(Object.fromEntries(recent)));
     } catch {}
   }
+  const _CK_START_POS_HASH = [
+    'wp12','wp22','wp32','wp42','wp52','wp62','wp72','wp82',
+    'wr11','wn21','wb31','wq41','wk51','wb61','wn71','wr81',
+    'bp17','bp27','bp37','bp47','bp57','bp67','bp77','bp87',
+    'br18','bn28','bb38','bq48','bk58','bb68','bn78','br88'
+  ].map(s => s.slice(0, 2) + 'square-' + s.slice(2)).sort().join('|');
+  function _ckAtStartingPosition() {
+    if (!IS_CHESSKID) return false;
+    try { return _ckHashBoard() === _CK_START_POS_HASH; } catch { return false; }
+  }
   function syncDetectionGame() {
+    const _ckFreshGame = IS_CHESSKID && _ckAtStartingPosition();
+    if (_ckFreshGame && activeDetectionKey && detection.oppMoves > 0) {
+      moveLog.length = 0;
+      positionMoves.clear();
+      Object.assign(detection, {
+        oppMoves: 0, totalCpl: 0, bestMoves: 0, topThree: 0, blunders: 0,
+        lastOppEvalCp: null, lastOppEvalFen: null,
+        lastMyEvalCp: null, lastMyEvalFen: null
+      });
+      activeDetectionKey = null;
+      recalcDetection();
+      try { window.__chClearCoachFeed && window.__chClearCoachFeed(); } catch {}
+    }
     const identity = getDetectionGameIdentity();
     if (!identity.key) return false;
     if (identity.key === activeDetectionKey) return true;
+    if (_ckFreshGame) {
+      activeDetectionKey = identity.key;
+      moveLog.length = 0;
+      positionMoves.clear();
+      Object.assign(detection, {
+        oppMoves: 0, totalCpl: 0, bestMoves: 0, topThree: 0, blunders: 0,
+        lastOppEvalCp: null, lastOppEvalFen: null,
+        lastMyEvalCp: null, lastMyEvalFen: null
+      });
+      recalcDetection();
+      return true;
+    }
     const cache = readDetectionCache();
     const saved = cache[identity.key];
     const currentMoves = getGameMoves();
@@ -921,6 +1265,7 @@
     if (!identity.stable && savedMoves.length && currentMoves.length < savedMoves.length && historyMatches) return false;
     if (activeDetectionKey && detection.oppMoves > 0 && !gameInProgress()) return false;
     if (activeDetectionKey && detection.oppMoves > 0 && currentMoves.length === 0 && !saved) return false;
+    const prevDetectionKey = activeDetectionKey;
     activeDetectionKey = identity.key;
     moveLog.length = 0;
     positionMoves.clear();
@@ -942,9 +1287,101 @@
       moveLog.push(...savedLog.filter(move => (move.color === 'w' || move.color === 'b') && Number.isFinite(move.cpl)));
       if (saved.detection && typeof saved.detection === 'object') Object.assign(detection, saved.detection);
     }
+    if (prevDetectionKey && prevDetectionKey !== identity.key && !canRestore) {
+      try { window.__chClearCoachFeed && window.__chClearCoachFeed(); } catch {}
+    }
     recalcDetection();
     return true;
   }
+  const IS_CHESSKID = /(^|\.)chesskid\.com$/i.test(location.hostname);
+  const IS_REAL_CHESSCOM = /(^|\.)chess\.com$/i.test(location.hostname);
+  const IS_CHESSCOM = !IS_CHESSKID; 
+  const IS_UNSUPPORTED_HOST = !IS_CHESSKID && !IS_REAL_CHESSCOM;
+  if (IS_CHESSKID) {
+    try { (document.body || document.documentElement).classList.add('chesskid-helper'); } catch {}
+  }
+  window.__chShowUnsupportedWarning = null;
+
+  let _ckLastBoardHash = null;
+  let _ckInferredTurn = 'w';
+  function _ckHashBoard() {
+    const pieces = document.querySelectorAll('.piece[class*="square-"]');
+    if (!pieces.length) return null;
+    const parts = [];
+    for (const p of pieces) {
+      const cls = (p.className || '').split(/\s+/);
+      const pc = cls.find(c => /^[wb][pnbrqk]$/.test(c));
+      const sq = cls.find(c => /^square-\d{2}$/.test(c));
+      if (pc && sq) parts.push(pc + sq);
+    }
+    parts.sort();
+    return parts.join('|');
+  }
+  function _ckSeedTurnFromMoveList() {
+    const moves = document.querySelectorAll('.move-list .move');
+    let halfMoves = 0;
+    for (const m of moves) {
+      const txt = (m.textContent || '').replace(/^\d+\./, '').trim();
+      halfMoves += (txt.match(/[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?/g) || []).length;
+    }
+    return (halfMoves % 2 === 0) ? 'w' : 'b';
+  }
+  let _ckPendingHash = null;
+  let _ckPendingSince = 0;
+  const CK_STABLE_MS = 200;
+  function _ckShouldDrawMyArrow(move) {
+    if (!IS_CHESSKID) return true;
+    if (!move || move.length < 4) return false;
+    const myColor = getMyColor();
+    const liveFen = getFEN();
+    if (!liveFen) return false;
+    if (liveFen.split(' ')[1] !== myColor) return false;
+    const fromPc = pieceAtSquare(liveFen, move.slice(0, 2));
+    if (!fromPc) return false;
+    const fromIsMine = (fromPc === fromPc.toUpperCase()) === (myColor === 'w');
+    if (!fromIsMine) return false;
+    const wClock = document.querySelector('.fastchess-clock.-color-white');
+    const bClock = document.querySelector('.fastchess-clock.-color-black');
+    if (wClock && bClock) {
+      const wRun = wClock.classList.contains('-running');
+      const bRun = bClock.classList.contains('-running');
+      if (wRun || bRun) {
+        if (myColor === 'w' && bRun && !wRun) return false;
+        if (myColor === 'b' && wRun && !bRun) return false;
+      }
+    }
+    return true;
+  }
+  function _ckInferTurnFromBoard() {
+    const h = _ckHashBoard();
+    if (!h) return null;
+    const curPieceCount = h.split('|').length;
+    if (curPieceCount < 2 || curPieceCount > 32) return _ckInferredTurn;
+    if (_ckLastBoardHash === null) {
+      _ckInferredTurn = _ckSeedTurnFromMoveList();
+      _ckLastBoardHash = h;
+      _ckPendingHash = null;
+      return _ckInferredTurn;
+    }
+    if (h === _ckLastBoardHash) {
+      _ckPendingHash = null;
+      return _ckInferredTurn;
+    }
+    const now = Date.now();
+    if (h !== _ckPendingHash) {
+      _ckPendingHash = h;
+      _ckPendingSince = now;
+      return _ckInferredTurn;
+    }
+    if (now - _ckPendingSince < CK_STABLE_MS) {
+      return _ckInferredTurn;
+    }
+    _ckInferredTurn = _ckSeedTurnFromMoveList();
+    _ckLastBoardHash = h;
+    _ckPendingHash = null;
+    return _ckInferredTurn;
+  }
+
   const pieceToFen = {
     wp: 'P',
     wn: 'N',
@@ -960,15 +1397,25 @@
     bk: 'k'
   };
   function getBoard() {
+    if (IS_CHESSKID) {
+      return document.querySelector('.chess-board__board') || null;
+    }
     return document.querySelector('wc-chess-board') || document.querySelector('chess-board') || document.querySelector('.board');
   }
   function isFlipped() {
+    if (IS_CHESSKID) {
+      const outer = document.querySelector('.chess-board');
+      return !!(outer && outer.classList.contains('-is-flipped'));
+    }
     const b = getBoard();
     if (!b) return false;
     if (b.hasAttribute?.('flipped') || b.classList?.contains('flipped')) return true;
     return false;
   }
   function getMyColor() {
+    if (IS_CHESSKID) {
+      return isFlipped() ? 'b' : 'w';
+    }
     const b = getBoard();
     if (b?.game?.getPlayingAs) try {
       const c = b.game.getPlayingAs();
@@ -979,6 +1426,11 @@
     return 'w';
   }
   function inActiveGame() {
+    if (IS_CHESSKID) {
+      const b = document.querySelector('.chess-board__board');
+      if (!b || !b.offsetParent) return false;
+      return document.querySelectorAll('.piece[class*="square-"]').length > 0;
+    }
     const b = getBoard();
     if (!b) return false;
     const clocks = document.querySelectorAll('.clock-component, .clock-bottom, .clock-top, [class*="clock-component"]');
@@ -999,12 +1451,32 @@
     return false;
   }
   function gameInProgress() {
+    if (IS_CHESSKID) {
+      const b = document.querySelector('.chess-board__board');
+      if (!b || b.offsetParent === null) return false;
+      const hasGameHash = /[?&#]g=/.test(location.hash || '');
+      const hasMoveList = !!document.querySelector('.move-list, .move-list-container, [class*="move-list"]');
+      const hasClock = !!document.querySelector('.fastchess-clock');
+      if (!hasGameHash && !hasMoveList && !hasClock) return false;
+      return true;
+    }
     const sel = '.game-setup-component, .bot-selection-component, [class*="game-setup"], [class*="bot-selection"], .selection-menu-personalities, .board-modal-container-component, .game-over-modal-content';
     const el = document.querySelector(sel);
     if (el && el.offsetParent !== null) return false;
     return true;
   }
   function isMyTurn() {
+    if (IS_CHESSKID) {
+      const wClock = document.querySelector('.fastchess-clock.-color-white');
+      const bClock = document.querySelector('.fastchess-clock.-color-black');
+      const wRun = !!(wClock && wClock.classList.contains('-running'));
+      const bRun = !!(bClock && bClock.classList.contains('-running'));
+      if (wRun && !bRun) return getMyColor() === 'w';
+      if (bRun && !wRun) return getMyColor() === 'b';
+      const t = _ckInferTurnFromBoard();
+      if (t) return t === getMyColor();
+      return getMyColor() === 'w'; 
+    }
     const b = getBoard();
     const bottom = document.querySelector('.clock-bottom, .clock-component-bottom');
     const top = document.querySelector('.clock-top, .clock-component-top');
@@ -1054,11 +1526,23 @@
       }
       return s + (e || '');
     });
-    const bottom = document.querySelector('.clock-bottom, .clock-component-bottom');
-    const top = document.querySelector('.clock-top, .clock-component-top');
     let turn = null;
-    if (bottom && bottom.classList.contains('clock-player-turn')) turn = getMyColor() || 'w';
-    else if (top && top.classList.contains('clock-player-turn')) turn = getMyColor() === 'w' ? 'b' : 'w';
+    if (IS_CHESSKID) {
+      const wClock = document.querySelector('.fastchess-clock.-color-white');
+      const bClock = document.querySelector('.fastchess-clock.-color-black');
+      const wRun = !!(wClock && wClock.classList.contains('-running'));
+      const bRun = !!(bClock && bClock.classList.contains('-running'));
+      if (wRun && !bRun) turn = 'w';
+      else if (bRun && !wRun) turn = 'b';
+      else {
+        turn = _ckInferTurnFromBoard() || 'w';
+      }
+    } else {
+      const bottom = document.querySelector('.clock-bottom, .clock-component-bottom');
+      const top = document.querySelector('.clock-top, .clock-component-top');
+      if (bottom && bottom.classList.contains('clock-player-turn')) turn = getMyColor() || 'w';
+      else if (top && top.classList.contains('clock-player-turn')) turn = getMyColor() === 'w' ? 'b' : 'w';
+    }
     if (!turn) return null;
     let castle = '';
     if (board[7][4] === 'K') {
@@ -1070,7 +1554,17 @@
       if (board[0][0] === 'r') castle += 'q';
     }
     if (!castle) castle = '-';
-    return rows.join('/') + ` ${turn} ${castle} - 0 1`;
+    let fullMove = 1;
+    try {
+      const moves = document.querySelectorAll('.move-list .move');
+      let halfMoves = 0;
+      for (const m of moves) {
+        const txt = (m.textContent || '').replace(/^\d+\./, '').trim();
+        halfMoves += (txt.match(/[KQRBN]?[a-h]?[1-8]?x?[a-h][1-8](?:=[QRBN])?[+#]?|O-O(?:-O)?/g) || []).length;
+      }
+      fullMove = Math.floor(halfMoves / 2) + 1;
+    } catch {}
+    return rows.join('/') + ` ${turn} ${castle} - 0 ${fullMove}`;
   }
   const positionMoves = new Map;
   const REPEAT_THRESHOLD = 2;
@@ -1104,54 +1598,85 @@
     return parts[0] + ' ' + (parts[1] || 'w');
   }
   let sfWorker = null, sfReady = false, sfCurrentMultiPV = 1;
+
+  const ENGINE_HASHES = {
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js': 'ccb130d7ff29408531c47d859a49f91d59d4f482d05a53eb1a3231a4f624c91a',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm': 'ee4f115bdb2d32cadf96cada104a05b5ec257d7ad6f57582190b49bc71f096de',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.asm.js': 'c07dad9a00a89f4b1dcba3971d58d8078715556eac0212368e4aab510e1e27c9',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js': '5243fd9b276cab7dfe3ad1d43ab9ead73568fac76468c614242977a210c4a391',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm': 'a8fbc05ec6920b56d7485826dcb02c5ffd2826bcbf751cf973046f237a9096f1',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.asm.js': '5c3b0998ca263baa8da83d3ec6ff154db461f3531e45840e5ba7ad28f806427c',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js': '1c8265e52fdaef797684b4979b42c5dcfe0350df3e11a87e48e4ec5f86e0ca5c',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm': '7ca31bedd166148931a1cc84dbd8dd9cf001744e9994caf23a3c6ff4988d7086',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.asm.js': '3651fc70f951d14fdc90f7497941ab62d59c9e70b967a451a69f92b3a3f377f0',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js': 'e2958bb89fc6ee0faedde87284bbb7e14da2ab224f06ca1bd82e62eaca87d00b',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm': 'a7acf7f20cb81d755b39b3dd42a4bdfd6e8c8d3d203d9fbdc525e40e1f68df08',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js': 'b203c697e523cc7b336c7ae3fe5057849a63c2c96f385a889512e21bc85d2003',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm': 'e5f1deb483cc28bcf4dff5d3cb9abb9aee697c1fe174c60d1c5cc476da76cae8',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.asm.js': '0f2a97f09805198135a87cc4e1d317096446c410af82dfbd5124627f34d5d6f5',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/10/stockfish.asm.js': '90e3c0639d41282e6f4cc99c3d3eb0afb67c27910d6d7546cd4f1803134258e4',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/8/stockfish.js': '402807d5a022f37c63cefa9f7d1c24ec6cae84c496035aa28f82d883981081f9',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/lozza/11/lozza.js': 'd1faf3c5c2a1add4e93c73615dc9d1df5983b3933d8d740e0efb11f838fbd741',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/garbochess/1/garbochess.js?v=4': 'd7935a8bff0572615b14dae6b6d40169431e7e5627e499fcb10139a6bda47e16',
+    'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/p4wn/1/p4wn.js?v=3': 'd2e8939d15be88e02326afffe7870719bd5a540fd7d2f0ff3c168eb593324de8',
+  };
+  async function sha256Hex(buf) {
+    const h = await crypto.subtle.digest('SHA-256', buf);
+    const b = new Uint8Array(h);
+    let s = '';
+    for (let i = 0; i < b.length; i++) s += b[i].toString(16).padStart(2, '0');
+    return s;
+  }
+  async function verifyEngineBytes(url, buf) {
+    const expected = ENGINE_HASHES[url];
+    if (!expected) {
+      console.warn('[Chess Assist] no pinned SHA-256 for', url, '— loading without verification');
+      return;
+    }
+    const actual = await sha256Hex(buf);
+    if (actual.toLowerCase() !== expected.toLowerCase()) {
+      throw new Error('SHA-256 mismatch for ' + url + ' (expected ' + expected + ', got ' + actual + ')');
+    }
+  }
+
   const ENGINES = {
     sf19: {
       label: 'Stockfish 19',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.js',
-      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/19/stockfish-lite-single.wasm',
-      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js',
-      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm',
+      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/19/stockfish.asm.js'
     },
     sf18: {
       label: 'Stockfish 18',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.js',
-      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/18/stockfish-lite-single.wasm',
-      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js',
-      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm',
+      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/18/stockfish.asm.js'
     },
     sf17: {
       label: 'Stockfish 17',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.js',
-      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/17/stockfish-lite-single.wasm',
-      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js',
-      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm',
+      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/17/stockfish.asm.js'
     },
     sf16: {
       label: 'Stockfish 16',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.js',
-      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/16/stockfish-lite-single.wasm',
-      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
-      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
+      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/16/stockfish.wasm'
     },
     sf11: {
       label: 'Stockfish 11',
       kind: 'wasm',
       maxDepth: 24,
-      jsUrl:     'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.js',
-      wasmUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@main/stockfish/11/stockfish-lite-single.wasm',
-      fallbackJsUrl:   'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js',
-      fallbackWasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm',
+      jsUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.js',
+      wasmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.wasm',
       asmUrl: 'https://cdn.jsdelivr.net/gh/ThatKidGlitchy/chess-engines@v1/stockfish/11/stockfish.asm.js'
     },
     sf10: {
@@ -1229,33 +1754,6 @@
       } catch (e) { rej(e); }
     });
   }
-  // Try the same resource across multiple CDN mirrors so a single blocked/slow CDN
-  // (common for Safari users with content blockers, Private Relay, or ITP quirks)
-  // doesn't hang the engine load. Chain: jsDelivr primary → Fastly edge → raw.github.
-  async function fetchEngineWithMirrors(url, onBytes) {
-    const mirrors = [url];
-    if (/cdn\.jsdelivr\.net/.test(url)) {
-      mirrors.push(url.replace('cdn.jsdelivr.net', 'fastly.jsdelivr.net'));
-    }
-    const rawMatch = url.match(/^https:\/\/(?:cdn|fastly)\.jsdelivr\.net\/gh\/([^/]+)\/([^/@]+)@([^/]+)\/(.+)$/);
-    if (rawMatch) {
-      const [, owner, repo, ref, path] = rawMatch;
-      mirrors.push(`https://raw.githubusercontent.com/${owner}/${repo}/${ref}/${path}`);
-    }
-    let lastErr;
-    for (let i = 0; i < mirrors.length; i++) {
-      const mirrorUrl = mirrors[i];
-      try {
-        if (i > 0) console.warn('[Chess Assist] retrying from mirror ' + (i + 1) + '/' + mirrors.length + ':', mirrorUrl);
-        return await fetchWithProgress(mirrorUrl, onBytes);
-      } catch (e) {
-        lastErr = e;
-        console.warn('[Chess Assist] mirror ' + (i + 1) + ' failed:', mirrorUrl, (e && e.message) || e);
-      }
-    }
-    throw lastErr || new Error('all mirrors failed for ' + url);
-  }
-
   async function fetchWithProgress(url, onBytes) {
     const TIMEOUT_MS = 60000;
     let ctrl = null, timer = null;
@@ -1288,6 +1786,7 @@
     }
   }
   let _initP = null;
+  let _silentReinit = false;
   async function initEngine() {
     if (sfReady) return;
     if (_initP) return _initP;
@@ -1300,6 +1799,8 @@
   async function _doInitEngine() {
     if (sfWorker) return;
     const engine = ENGINES[currentEngine] || ENGINES['sf19'];
+    const _silent = _silentReinit;
+    const _show = _silent ? () => {} : showLoadingOverlay;
     try {
       if (engine.kind === 'wasm') {
         let jsBytes = 0, jsTotal = 0, wasmBytes = 0, wasmTotal = 0;
@@ -1307,21 +1808,23 @@
           const total = jsTotal + wasmTotal;
           if (total > 0) {
             const pct = (jsBytes + wasmBytes) / total * 100;
-            showLoadingOverlay(null, pct);
+            _show(null, pct);
           }
         };
-        const [jsBuf, wasmBuf] = await Promise.all([ fetchEngineWithMirrors(engine.jsUrl, (r, t) => {
+        const [jsBuf, wasmBuf] = await Promise.all([ fetchWithProgress(engine.jsUrl, (r, t) => {
           jsBytes = r;
           jsTotal = t;
           updateProgress();
-        }), fetchEngineWithMirrors(engine.wasmUrl, (r, t) => {
+        }), fetchWithProgress(engine.wasmUrl, (r, t) => {
           wasmBytes = r;
           wasmTotal = t;
           updateProgress();
         }) ]);
+        await verifyEngineBytes(engine.jsUrl, jsBuf);
+        await verifyEngineBytes(engine.wasmUrl, wasmBuf);
         const jsCode = (new TextDecoder).decode(jsBuf);
-        showLoadingOverlay(null, 100);
-        const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
+        _show(null, 100);
+        const boot = 'try{if(typeof SharedArrayBuffer==="undefined"){self.SharedArrayBuffer=function(){throw new Error("SAB disabled");};self.SharedArrayBuffer.prototype={};}else{try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+err);});}catch(err){self.postMessage("info string Stockfish boot error: "+err);}}}};';
         sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], {
           type: 'application/javascript'
         })));
@@ -1331,21 +1834,22 @@
           js: jsCode
         }, [ wasmBuf ]);
       } else {
-        const buf = await fetchEngineWithMirrors(engine.url, (r, t) => {
-          if (t > 0) showLoadingOverlay(null, r / t * 100);
+        const buf = await fetchWithProgress(engine.url, (r, t) => {
+          if (t > 0) _show(null, r / t * 100);
         });
+        await verifyEngineBytes(engine.url, buf);
         const code = (new TextDecoder).decode(buf);
-        showLoadingOverlay(null, 100);
-        const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
+        _show(null, 100);
+        const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
         sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
           type: 'application/javascript'
         })));
       }
-      await uciCommand('uci', 'uciok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
+      await uciCommand('uci', 'uciok');
       uciSend('setoption name Hash value ' + (engine.hash || 64));
       sfCurrentMultiPV = 1;
       if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
-      await uciCommand('isready', 'readyok', engine.kind === 'wasm' && engine.fallbackJsUrl ? 15000 : 6e4);
+      await uciCommand('isready', 'readyok');
       sfReady = true;
       sfWorker.onerror = handleWorkerCrash;
       hideLoadingOverlay();
@@ -1357,39 +1861,12 @@
         if (sfWorker) sfWorker.terminate();
       } catch {}
       sfWorker = null;
-      // Fallback 1 (wasm): the engine's older stockfish.{js,wasm} pair.
-      if (engine.kind === 'wasm' && engine.fallbackJsUrl && engine.fallbackWasmUrl) {
-        try {
-          const [jsBuf, wasmBuf] = await Promise.all([
-            fetchEngineWithMirrors(engine.fallbackJsUrl, () => {}),
-            fetchEngineWithMirrors(engine.fallbackWasmUrl, () => {})
-          ]);
-          const jsCode = (new TextDecoder).decode(jsBuf);
-          const boot = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}self.onmessage=function(e){if(e.data&&e.data.type==="init"){self.onmessage=null;try{var w=e.data.wasm,done=false,of=self.fetch;self.fetch=function(u,o){if(!done){done=true;return Promise.resolve(new Response(w,{status:200,headers:{"Content-Type":"application/wasm"}}))}return of.call(self,u,o)};try{importScripts(URL.createObjectURL(new Blob([e.data.js],{type:"application/javascript"})));}catch(err){self.postMessage("info string importScripts failed: "+(err&&err.message||err));throw err;}if(!self.onmessage&&typeof Stockfish==="function"){try{Promise.resolve(Stockfish()).then(function(sf){if(sf&&sf.addMessageListener){sf.addMessageListener(function(line){self.postMessage(line);});self.onmessage=function(ev){try{sf.postMessage(ev.data);}catch(err){}};}}).catch(function(err){self.postMessage("info string Stockfish init error: "+(err&&err.message||err));});}catch(err){self.postMessage("info string Stockfish boot error: "+(err&&err.message||err));}}}catch(err){self.postMessage("info string worker init exception: "+(err&&err.message||err));}}};';
-          sfWorker = new Worker(URL.createObjectURL(new Blob([ boot ], { type: 'application/javascript' })));
-          sfWorker.postMessage({ type: 'init', wasm: wasmBuf, js: jsCode }, [ wasmBuf ]);
-          await uciCommand('uci', 'uciok', 20000);
-          uciSend('setoption name Hash value ' + (engine.hash || 64));
-          sfCurrentMultiPV = 1;
-          if (!engine.noMultiPV) uciSend('setoption name MultiPV value 1');
-          await uciCommand('isready', 'readyok', 20000);
-          sfReady = true;
-          sfWorker.onerror = handleWorkerCrash;
-          lastEngineResponse = Date.now();
-          installReadyokListener();
-          hideLoadingOverlay();
-          return;
-        } catch (eFallback) {
-          console.warn('[Chess Assist] wasm fallback failed:', eFallback);
-          try { if (sfWorker) sfWorker.terminate(); } catch {}
-          sfWorker = null;
-        }
-      }
       if (engine.kind === 'wasm' && engine.asmUrl) {
         try {
-          const asmBuf = await fetchEngineWithMirrors(engine.asmUrl, () => {});
+          const asmBuf = await fetchWithProgress(engine.asmUrl, () => {});
+          await verifyEngineBytes(engine.asmUrl, asmBuf);
           const code = (new TextDecoder).decode(asmBuf);
-          const jsPrefix = 'try{self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||(ev.error&&ev.error.message)||ev));}catch(_){}});}catch(_){}\n';
+          const jsPrefix = 'try{if(typeof SharedArrayBuffer!=="undefined"){try{new SharedArrayBuffer(1);}catch(_e){try{delete self.SharedArrayBuffer;}catch(_){self.SharedArrayBuffer=void 0;}}}self.addEventListener("error",function(ev){try{self.postMessage("info string worker error: "+(ev.message||ev));}catch(_){}});}catch(_){}\n';
           sfWorker = new Worker(URL.createObjectURL(new Blob([ jsPrefix + code ], {
             type: 'application/javascript'
           })));
@@ -1524,6 +2001,7 @@
     const now = Date.now();
     if (now - _crashWindowStart > 60000) { _crashWindowStart = now; _crashCount = 0; }
     _crashCount++;
+    if (pendingQuery && pendingQuery.fen) _crashedFens.add(pendingQuery.fen);
     if (_crashCount > 3) {
       console.warn('[Chess Assist] Engine crashed ' + _crashCount + ' times in 60s — giving up');
       hideLoadingOverlay();
@@ -1557,7 +2035,10 @@
     _initP = null;
     fenCache.clear();
     lastEngineResponse = Date.now();
-    initEngine().catch(err => console.warn('[Chess Assist] restart failed:', err));
+    _silentReinit = true;
+    initEngine()
+      .catch(err => console.warn('[Chess Assist] restart failed:', err))
+      .finally(() => { _silentReinit = false; });
   }
   let lastEngineResponse = Date.now();
   setInterval(() => {
@@ -1572,7 +2053,7 @@
   function uciSend(cmd) {
     if (sfWorker) sfWorker.postMessage(cmd);
   }
-  function uciCommand(cmd, waitFor, timeoutMs) {
+  function uciCommand(cmd, waitFor) {
     return new Promise((resolve, reject) => {
       const worker = sfWorker;
       if (!worker) {
@@ -1584,7 +2065,7 @@
           worker.removeEventListener('message', handler);
         } catch {}
         reject(new Error('UCI timeout waiting for ' + waitFor));
-      }, timeoutMs || 6e4);
+      }, 1e4);
       const handler = e => {
         lastEngineResponse = Date.now();
         if (typeof e.data === 'string' && e.data.startsWith(waitFor)) {
@@ -1604,8 +2085,29 @@
   let activeSearchHandler = null;
   let activeSearchTimeout = null;
   let activeSearchResolve = null;
+  const _crashedFens = new Set();
+  function _isValidFen(fen) {
+    if (typeof fen !== 'string') return false;
+    const parts = fen.trim().split(/\s+/);
+    if (parts.length < 2) return false;
+    const [pos, side] = parts;
+    if (side !== 'w' && side !== 'b') return false;
+    const ranks = pos.split('/');
+    if (ranks.length !== 8) return false;
+    for (const r of ranks) {
+      let sum = 0;
+      for (const c of r) {
+        if (c >= '1' && c <= '8') sum += +c;
+        else if ('pnbrqkPNBRQK'.includes(c)) sum += 1;
+        else return false;
+      }
+      if (sum !== 8) return false;
+    }
+    return true;
+  }
   function queryLocal(fen, depth, multiPV) {
     multiPV = multiPV || 1;
+    if (!_isValidFen(fen) || _crashedFens.has(fen)) return Promise.resolve([]);
     const cached = getCachedEval(fen, multiPV);
     if (cached) {
       const _expSide = fen.split(' ')[1];
@@ -1698,7 +2200,7 @@
         activeSearchHandler = null;
         const best = line.split(/\s+/)[1];
         if (best && best.length >= 4 && !moves[1]) moves[1] = {
-          move: best.slice(0, 4),
+          move: best.slice(0, 5),
           cp: null
         };
         let results = Object.entries(moves).sort((a, b) => a[0] - b[0]).map(e => e[1]);
@@ -1732,7 +2234,7 @@
               } else cp = parseInt(parts[1]);
             }
             moves[pvIdx] = {
-              move: mv.slice(0, 4),
+              move: mv.slice(0, 5),
               cp,
               mate
             };
@@ -1753,7 +2255,7 @@
               } else cp = parseInt(parts[1]);
             }
             moves[1] = {
-              move: mv.slice(0, 4),
+              move: mv.slice(0, 5),
               cp,
               mate
             };
@@ -1854,6 +2356,118 @@
     }
     return false;
   }
+  async function uciProbeMate(fen, move) {
+    if (!sfWorker || !sfReady) return false;
+    return new Promise(resolve => {
+      let isMate = false;
+      let settled = false;
+      const bail = setTimeout(() => {
+        if (settled) return;
+        settled = true;
+        try { sfWorker.removeEventListener('message', h); } catch {}
+        resolve(isMate);
+      }, 1500);
+      const h = e => {
+        const line = typeof e.data === 'string' ? e.data : '';
+        const m = line.match(/score\s+mate\s+(-?\d+)/);
+        if (m && parseInt(m[1]) === 1) isMate = true;
+        if (line.startsWith('bestmove')) {
+          if (settled) return;
+          settled = true;
+          clearTimeout(bail);
+          sfWorker.removeEventListener('message', h);
+          resolve(isMate);
+        }
+      };
+      sfWorker.addEventListener('message', h);
+      uciSend('position fen ' + fen);
+      uciSend('go depth 1 searchmoves ' + move);
+    });
+  }
+
+  async function maybeUpgradeKnightPromo(fen, move) {
+    if (!move || move.length !== 5) return move;
+    const promo = move[4].toLowerCase();
+    if (promo === 'n') return move;
+    const from = move.slice(0, 2), to = move.slice(2, 4);
+    const knightMove = from + to + 'n';
+    try {
+      const knightMates = await uciProbeMate(fen, knightMove);
+      if (!knightMates) return move;
+      const originalMates = await uciProbeMate(fen, move);
+      if (originalMates) return move;
+      return knightMove;
+    } catch { return move; }
+  }
+
+  let engineRecommendedPromo = null; 
+
+  function _findPromoPieceEl(promoWin, piece, color) {
+    const sels = [
+      `.promotion-piece.${color}${piece}`,
+      `.promotion-piece[data-piece="${color}${piece}"]`,
+      `.promotion-piece[data-piece="${piece}"]`,
+      `[data-piece="${color}${piece}"]`,
+      `.piece.${color}${piece}`,
+      `.${color}${piece}`,
+      `[class*="promotion"][class*="${color}${piece}"]`,
+      `[class*="${color}${piece}"]`
+    ];
+    for (const s of sels) { const el = promoWin.querySelector(s); if (el) return el; }
+    const kids = [...promoWin.querySelectorAll('.promotion-piece, [class*="promotion-piece"]')];
+    const order = { b: 0, n: 1, q: 2, r: 3 };
+    if (kids.length >= 4 && order[piece] != null) return kids[order[piece]];
+    const shaped = [...promoWin.querySelectorAll('*')].filter(el => {
+      const r = el.getBoundingClientRect();
+      return r.width > 30 && r.width < 120 && Math.abs(r.width - r.height) < 15;
+    });
+    if (shaped.length >= 4 && order[piece] != null) return shaped[order[piece]];
+    return null;
+  }
+
+  function _ensurePromoRingEl() {
+    let el = document.getElementById('ch-promo-ring-overlay');
+    if (el) return el;
+    el = document.createElement('div');
+    el.id = 'ch-promo-ring-overlay';
+    el.style.cssText = 'position:fixed;pointer-events:none;z-index:2147483647;border-radius:10px;display:none;box-sizing:border-box;';
+    document.body.appendChild(el);
+    return el;
+  }
+  function hidePromoRing() {
+    const el = document.getElementById('ch-promo-ring-overlay');
+    if (el) el.style.display = 'none';
+  }
+  function applyPromoRing() {
+    if (window.chessHelper && window.chessHelper.autoPlay) { hidePromoRing(); return; }
+    const promoWin = document.querySelector('.promotion-window, .promotion-area, [class*="promotion"]');
+    if (!promoWin) { hidePromoRing(); return; }
+    const style = getComputedStyle(promoWin);
+    if (style.display === 'none' || style.visibility === 'hidden' || +style.opacity === 0) { hidePromoRing(); return; }
+    if (!promoWin.className.includes('--visible') && !promoWin.classList.contains('promotion-window--visible') && promoWin.offsetHeight < 20) { hidePromoRing(); return; }
+    const piece = (engineRecommendedPromo && engineRecommendedPromo.piece) || 'q';
+    const color = (engineRecommendedPromo && engineRecommendedPromo.color) || (getMyColor() || 'w');
+    const pieceEl = _findPromoPieceEl(promoWin, piece, color);
+    if (!pieceEl) { hidePromoRing(); return; }
+    const r = pieceEl.getBoundingClientRect();
+    if (!r.width || !r.height) { hidePromoRing(); return; }
+    const overlay = _ensurePromoRingEl();
+    const accent = getComputedStyle(document.documentElement).getPropertyValue('--ch-accent').trim() || '#81b64c';
+    const pad = 4;
+    overlay.style.left   = (r.left - pad) + 'px';
+    overlay.style.top    = (r.top - pad) + 'px';
+    overlay.style.width  = (r.width + pad * 2) + 'px';
+    overlay.style.height = (r.height + pad * 2) + 'px';
+    overlay.style.boxShadow = `0 0 0 3px ${accent}, 0 0 16px 4px ${accent}`;
+    overlay.style.animation = 'ch-promo-ring-pulse 1s ease-in-out infinite';
+    overlay.style.display = 'block';
+  }
+  setInterval(applyPromoRing, 120);
+  try {
+    const promoObs = new MutationObserver(() => applyPromoRing());
+    promoObs.observe(document.body, { childList: true, subtree: true });
+  } catch {}
+
   async function makeMove(move) {
     if (!move || move.length < 4) return;
     const from = move.slice(0, 2), to = move.slice(2, 4);
@@ -1915,21 +2529,36 @@
     }
   }
   let myArrowIds = [];
-  let _activeMyMove = null;
-  let _activeOppMove = null;
+  let lastMyArrowMove = null;
+  let lastOppArrowMove = null;
   function clearArrows() {
     drawing = true;
+    if (IS_CHESSKID) {
+      myArrowIds = [];
+      lastMyArrowMove = null;
+      document.querySelectorAll('.ch-arrow-svg').forEach(e => e.remove());
+      drawing = false;
+      return;
+    }
     const b = getBoard();
-    const keepOpp = _activeOppMove;
     try {
-      if (b?.game?.markings?.removeAll) b.game.markings.removeAll();
+      if (b?.game?.markings?.remove && myArrowIds.length) {
+        for (const id of myArrowIds) {
+          try { b.game.markings.remove(id); } catch {}
+        }
+      }
+      if (b?.game?.markings?.removeAll) {
+        b.game.markings.removeAll();
+        oppArrowIds = [];
+      }
     } catch {}
-    oppArrowIds = [];
     myArrowIds = [];
-    _activeMyMove = null;
+    lastMyArrowMove = null;
     document.querySelectorAll('.ch-arrow-svg').forEach(e => e.remove());
     drawing = false;
-    if (keepOpp && window.chessHelper.showOpponent) _drawOppArrowRaw(keepOpp);
+    if (lastOppArrowMove && window.chessHelper && window.chessHelper.showOpponent) {
+      try { _drawOppArrowRaw(lastOppArrowMove); } catch {}
+    }
   }
   function clearShading() {
     drawing = true;
@@ -1977,6 +2606,83 @@
     const df = Math.abs(from.charCodeAt(0) - to.charCodeAt(0));
     const dr = Math.abs(parseInt(from[1], 10) - parseInt(to[1], 10));
     const isKnight = (df === 1 && dr === 2) || (df === 2 && dr === 1);
+    if (IS_CHESSKID) {
+      let svg = b.querySelector('.' + cssClass);
+      if (!svg) {
+        svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svg.setAttribute('viewBox', '0 0 100 100');
+        svg.classList.add(cssClass);
+        svg.style.cssText = `position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:${zIndex};`;
+        if (getComputedStyle(b).position === 'static') b.style.position = 'relative';
+        b.appendChild(svg);
+      } else {
+        svg.innerHTML = '';
+      }
+      const BODY_W = 2.75, HEAD_W = 6.5, HEAD_LEN = 4.5, GAP = 4.5;
+      const fill = (color === '#96bc4b' || color === '#9fcf3f') ? 'rgba(159,207,63,0.8)'
+                 : (color === '#e04040') ? 'rgba(224,64,64,0.8)'
+                 : color;
+      const fx = s.x, fy = s.y, tx = e.x, ty = e.y;
+      let pointsStr;
+      if (!isKnight) {
+        const dx = tx - fx, dy = ty - fy;
+        const len = Math.hypot(dx, dy);
+        const ux = dx / len, uy = dy / len;
+        const px = -uy, py = ux; 
+        const bsx = fx + ux * GAP, bsy = fy + uy * GAP;         
+        const bex = tx - ux * HEAD_LEN, bey = ty - uy * HEAD_LEN; 
+        const fmt = (a, b) => a.toFixed(3) + ',' + b.toFixed(3);
+        pointsStr = [
+          fmt(bsx + px * BODY_W / 2, bsy + py * BODY_W / 2),
+          fmt(bex + px * BODY_W / 2, bey + py * BODY_W / 2),
+          fmt(bex + px * HEAD_W / 2, bey + py * HEAD_W / 2),
+          fmt(tx, ty),
+          fmt(bex - px * HEAD_W / 2, bey - py * HEAD_W / 2),
+          fmt(bex - px * BODY_W / 2, bey - py * BODY_W / 2),
+          fmt(bsx - px * BODY_W / 2, bsy - py * BODY_W / 2)
+        ].join(' ');
+      } else {
+        const vertFirst = dr > df;
+        const cx = vertFirst ? fx : tx;
+        const cy = vertFirst ? ty : fy;
+        const l1dx = cx - fx, l1dy = cy - fy;
+        const l1len = Math.hypot(l1dx, l1dy);
+        const l1ux = l1dx / l1len, l1uy = l1dy / l1len;
+        const l1px = -l1uy, l1py = l1ux;
+        const l2dx = tx - cx, l2dy = ty - cy;
+        const l2len = Math.hypot(l2dx, l2dy);
+        const l2ux = l2dx / l2len, l2uy = l2dy / l2len;
+        const l2px = -l2uy, l2py = l2ux;
+        const bsx = fx + l1ux * GAP, bsy = fy + l1uy * GAP;
+        const bex = tx - l2ux * HEAD_LEN, bey = ty - l2uy * HEAD_LEN;
+        const cross = l1ux * l2uy - l1uy * l2ux;
+        const turnLeft = cross < 0;
+        const insideSign = turnLeft ? 1 : -1;
+        const outsideSign = -insideSign;
+        const fmt = (a, b) => a.toFixed(3) + ',' + b.toFixed(3);
+        pointsStr = [
+          fmt(bsx + l1px * outsideSign * BODY_W / 2, bsy + l1py * outsideSign * BODY_W / 2),
+          fmt(cx + l1px * outsideSign * BODY_W / 2 + l2px * outsideSign * BODY_W / 2,
+              cy + l1py * outsideSign * BODY_W / 2 + l2py * outsideSign * BODY_W / 2),
+          fmt(bex + l2px * outsideSign * BODY_W / 2, bey + l2py * outsideSign * BODY_W / 2),
+          fmt(bex + l2px * outsideSign * HEAD_W / 2, bey + l2py * outsideSign * HEAD_W / 2),
+          fmt(tx, ty),
+          fmt(bex + l2px * insideSign * HEAD_W / 2, bey + l2py * insideSign * HEAD_W / 2),
+          fmt(bex + l2px * insideSign * BODY_W / 2, bey + l2py * insideSign * BODY_W / 2),
+          fmt(cx + l1px * insideSign * BODY_W / 2 + l2px * insideSign * BODY_W / 2,
+              cy + l1py * insideSign * BODY_W / 2 + l2py * insideSign * BODY_W / 2),
+          fmt(bsx + l1px * insideSign * BODY_W / 2, bsy + l1py * insideSign * BODY_W / 2)
+        ].join(' ');
+      }
+      const poly = document.createElementNS('http://www.w3.org/2000/svg', 'polygon');
+      poly.setAttribute('points', pointsStr);
+      poly.setAttribute('fill', fill);
+      poly.setAttribute('opacity', '0.8');
+      poly.setAttribute('class', 'arrow');
+      svg.appendChild(poly);
+      drawing = false;
+      return;
+    }
     const bodyW = 2.2;
     const headW = 5;
     const headLen = 5;
@@ -2030,8 +2736,40 @@
     svg.appendChild(path);
     drawing = false;
   }
+  function drawNativeArrow(move) {
+    if (!_ckShouldDrawMyArrow(move)) {
+      clearArrows();
+      return;
+    }
+    clearArrows();
+    const b = getBoard();
+    if (!b || !move) return;
+    const from = move.slice(0, 2), to = move.slice(2, 4);
+    lastMyArrowMove = move;
+    try {
+      if (b.game?.markings?.addMany) {
+        drawing = true;
+        const ret = b.game.markings.addMany([ {
+          data: {
+            from,
+            to,
+            color: '#96bc4b',
+            opacity: .8
+          },
+          type: 'arrow'
+        } ]);
+        if (Array.isArray(ret)) myArrowIds = ret.filter(x => x != null);
+        drawing = false;
+        return;
+      }
+    } catch {
+      drawing = false;
+    }
+    drawArrowSVG(b, move, '#96bc4b', '0.8', 'ch-arrow-svg', 1e3);
+  }
+  let oppArrowIds = [];
   function _drawMyArrowRaw(move) {
-    _activeMyMove = move;
+    if (!_ckShouldDrawMyArrow(move)) return;
     const b = getBoard();
     if (!b || !move) return;
     const from = move.slice(0, 2), to = move.slice(2, 4);
@@ -2046,30 +2784,12 @@
         drawing = false;
         return;
       }
-    } catch { drawing = false; }
+    } catch {
+      drawing = false;
+    }
     drawArrowSVG(b, move, '#96bc4b', '0.8', 'ch-arrow-svg', 1e3);
   }
-  function drawNativeArrow(move) {
-    clearArrows();
-    _drawMyArrowRaw(move);
-  }
-  let oppArrowIds = [];
-  function clearOpponentArrow() {
-    drawing = true;
-    const b = getBoard();
-    const keepMy = _activeMyMove;
-    try {
-      if (b?.game?.markings?.removeAll) b.game.markings.removeAll();
-    } catch {}
-    document.querySelectorAll('.ch-opponent-svg').forEach(e => e.remove());
-    oppArrowIds = [];
-    myArrowIds = [];
-    _activeOppMove = null;
-    drawing = false;
-    if (keepMy && (window.chessHelper.showArrow || window.chessHelper.hiddenArrow)) _drawMyArrowRaw(keepMy);
-  }
   function _drawOppArrowRaw(move) {
-    _activeOppMove = move;
     const b = getBoard();
     if (!b || !move) return;
     const from = move.slice(0, 2), to = move.slice(2, 4);
@@ -2084,11 +2804,43 @@
         drawing = false;
         return;
       }
-    } catch { drawing = false; }
+    } catch {
+      drawing = false;
+    }
     drawArrowSVG(b, move, '#e04040', '0.8', 'ch-opponent-svg', 1002);
+  }
+  function clearOpponentArrow() {
+    drawing = true;
+    if (IS_CHESSKID) {
+      document.querySelectorAll('.ch-opponent-svg').forEach(e => e.remove());
+      oppArrowIds = [];
+      lastOppArrowMove = null;
+      drawing = false;
+      return;
+    }
+    document.querySelectorAll('.ch-opponent-svg').forEach(e => e.remove());
+    const b = getBoard();
+    try {
+      if (b?.game?.markings?.remove && oppArrowIds.length) {
+        for (const id of oppArrowIds) {
+          try { b.game.markings.remove(id); } catch {}
+        }
+      }
+      if (b?.game?.markings?.removeAll) {
+        b.game.markings.removeAll();
+        myArrowIds = [];
+      }
+    } catch {}
+    oppArrowIds = [];
+    lastOppArrowMove = null;
+    drawing = false;
+    if (lastMyArrowMove && window.chessHelper && window.chessHelper.showArrow && !window.chessHelper.hiddenArrow) {
+      try { _drawMyArrowRaw(lastMyArrowMove); } catch {}
+    }
   }
   function drawOpponentArrow(move) {
     clearOpponentArrow();
+    lastOppArrowMove = move;
     _drawOppArrowRaw(move);
   }
   function cpToWinPct(cp) {
@@ -2115,7 +2867,10 @@
     top.style.textShadow = flipped ? '0 0 4px #fff, 0 0 4px #fff' : '0 0 4px #000, 0 0 4px #000';
     bot.style.textShadow = flipped ? '0 0 4px #000, 0 0 4px #000' : '0 0 4px #fff, 0 0 4px #fff';
   }
-  let processingMy = false, processingOpp = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false;
+  let processingMy = false, processingOpp = false, lastFen = '', lastMovedFen = '', drawing = false, lastOppFen = '', lastOppMove = null, waitingForOpponent = false, lastOppClearedForFen = '';
+  let lastMyEngineRec = null; 
+  let lastOppEngineRec = null; 
+  let lastOppFenBeforeMove = ''; 
   let lastOppQueryFen = '', lastOppQueryAt = 0;
   let oppAbort = null;
   let _lastSyncDetection = 0, _lastInActive = false, _lastGip = false;
@@ -2137,16 +2892,19 @@
       for (let i = 1; i <= 5; i++) setTimeout(tick, i * 1e3);
     }
     _lastGip = _gip;
+    if (IS_CHESSKID && !_gip) return;
     const b = getBoard();
     if (!b) return;
-    const _fenCheck = (() => {
-      try {
-        return b.game?.getFEN?.();
-      } catch {
-        return null;
-      }
-    })();
+    const _fenCheck = IS_CHESSKID
+      ? getFEN()
+      : (() => { try { return b.game?.getFEN?.(); } catch { return null; } })();
     if (!_fenCheck) return;
+    try {
+      const _myColor = getMyColor();
+      if (_myColor && _fenCheck.split(' ')[1] !== _myColor) {
+        lastOppFenBeforeMove = _fenCheck;
+      }
+    } catch {}
     if (window.chessHelper.detection && Date.now() - _lastSyncDetection > 2e3) {
       _lastSyncDetection = Date.now();
       syncDetectionGame();
@@ -2159,6 +2917,7 @@
       waitingForOpponent = false;
       lastFen = '';
       const fen = getFEN();
+      if (fen && fen.split(' ')[1] !== getMyColor()) lastOppFenBeforeMove = fen;
       if (fen) {
         const _fenTurn = fen.split(' ')[1];
         if (_fenTurn === getMyColor()) {
@@ -2176,6 +2935,7 @@
         lastOppQueryAt = Date.now();
       }
       processingOpp = true;
+      if (fen) lastOppFenBeforeMove = fen;
       clearArrows();
       clearShading();
       if (fen) {
@@ -2194,7 +2954,10 @@
           }
           const om = candidates.length ? candidates[0].move : null;
           if (candidates.length && candidates[0].cp !== null) {
-            if (detection.lastMyEvalCp !== null && detection.lastMyEvalFen && detection.lastMyEvalFen !== fen) {
+            const _mateSentinel = 9e4;
+            const _myEvalIsMate = Math.abs(detection.lastMyEvalCp) >= _mateSentinel;
+            const _curEvalIsMate = Math.abs(candidates[0].cp) >= _mateSentinel;
+            if (detection.lastMyEvalCp !== null && detection.lastMyEvalFen && detection.lastMyEvalFen !== fen && !_myEvalIsMate && !_curEvalIsMate) {
               const rawMyCpl = detection.lastMyEvalCp + candidates[0].cp;
               const myCpl = Number.isFinite(rawMyCpl) ? Math.min(500, Math.max(0, rawMyCpl)) : 500;
               moveLog.push({
@@ -2217,6 +2980,46 @@
           }
           lastOppFen = fen;
           lastOppMove = om;
+          if (om && candidates[0]) {
+            lastOppEngineRec = {
+              fen,
+              bestUci: om,
+              cp: candidates[0].cp,
+              mate: candidates[0].mate
+            };
+          }
+          try {
+            if (typeof Coach !== 'undefined' && lastMyEngineRec && lastMyEngineRec.fen) {
+              const userUci = Coach.detectMoveBetween(lastMyEngineRec.fen, fen);
+              if (userUci && userUci !== lastMyEngineRec.bestUci) {
+                const myBefore = lastMyEngineRec.cp;
+                const myAfter = candidates[0] && candidates[0].cp != null ? -candidates[0].cp : myBefore;
+                const dCp = myBefore - myAfter;
+                const myColor = getMyColor();
+                const explanation = Coach.explainMove({
+                  fenBefore: lastMyEngineRec.fen,
+                  fenAfter: fen,
+                  uci: userUci,
+                  bestUci: lastMyEngineRec.bestUci,
+                  replyUci: om,
+                  cpBefore: myBefore,
+                  cpAfter: myAfter,
+                  mover: myColor === 'w' ? 'w' : 'b',
+                  mateAgainst: candidates[0] && candidates[0].mate && candidates[0].mate > 0 ? candidates[0].mate : null,
+                  mateFor: lastMyEngineRec.mate && lastMyEngineRec.mate > 0 ? lastMyEngineRec.mate : null,
+                  isCapture: userUci && lastMyEngineRec.fen.split(' ')[0].split('/').join('').includes('p') &&
+                             (() => { try { const b = Coach.fenToMap(lastMyEngineRec.fen); return !!b[userUci.slice(2,4)]; } catch { return false; } })(),
+                  pov: 'me',
+                  ply: 99
+                });
+                if (explanation && explanation.text && dCp >= 30) {
+                  const userMoveNum = (() => { try { return parseInt(lastMyEngineRec.fen.split(' ')[5]) || null; } catch { return null; } })();
+                  if (typeof aiAppend === 'function') aiAppend('user-move', explanation.text, userMoveNum);
+                }
+              }
+              lastMyEngineRec = null; 
+            }
+          } catch (e) { console.warn('[Coach] move-explain error:', e); }
           let _oppOk = false;
           if (om) {
             const _fromPc = pieceAtSquare(fen, om.slice(0, 2));
@@ -2249,58 +3052,82 @@
       const _fenTurn = fen.split(' ')[1];
       if (_fenTurn !== getMyColor()) return;
     }
+    if (fen !== lastOppClearedForFen) {
+      lastOppClearedForFen = fen;
+      clearOpponentArrow();
+    }
     if (fen === lastFen) return;
     if (waitingForOpponent && fen !== lastMovedFen) waitingForOpponent = false;
     if (window.chessHelper.autoPlay && fen === lastMovedFen) return;
     processingMy = true;
     try {
-      thinkingEl.classList.add('active');
-      console.log('[CH-MY] start fen=', fen.slice(0, 30), 'depth=', ENGINE_DEPTH);
+      showThinking();
       const result = await fetchRemote(fen);
-      console.log('[CH-MY] fetchRemote returned:', result ? result.move : 'null', 'cp=', result?.cp);
       if (getFEN() !== fen) {
-        console.log('[CH-MY] BAIL: fen changed. was=', fen.slice(0,30), 'now=', (getFEN()||'null').slice(0,30));
-        thinkingEl.classList.remove('active');
+        hideThinking();
         return;
       }
       if (isMyTurn() !== true) {
-        console.log('[CH-MY] BAIL: isMyTurn=', isMyTurn());
-        thinkingEl.classList.remove('active');
+        hideThinking();
         return;
       }
       {
         const _liveFen = getFEN();
         if (!_liveFen || _liveFen.split(' ')[1] !== getMyColor()) {
-          console.log('[CH-MY] BAIL: liveFen check. liveFen=', _liveFen?.slice(0,30), 'myColor=', getMyColor());
-          thinkingEl.classList.remove('active');
+          hideThinking();
           return;
         }
       }
-      thinkingEl.classList.remove('active');
+      hideThinking();
       if (!result) {
-        console.log('[CH-MY] BAIL: no result from engine');
         return;
       }
-      const mv = result.move;
+      let mv = result.move;
       {
         const _fromPc = pieceAtSquare(fen, mv.slice(0, 2));
         const _isOurs = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) === (getMyColor() === 'w'));
         if (!_isOurs) {
-          console.log('[CH-MY] BAIL: piece-ownership check. mv=', mv, 'fromPc=', _fromPc, 'myColor=', getMyColor());
           return;
         }
       }
-      console.log('[CH-MY] drawing arrow for', mv);
+      if (mv.length === 5 && mv[4].toLowerCase() !== 'n') {
+        try {
+          const upgraded = await maybeUpgradeKnightPromo(fen, mv);
+          if (upgraded && upgraded !== mv) {
+            mv = upgraded;
+            result.move = upgraded;
+          }
+        } catch {}
+        const _curFen = getFEN();
+        if (!_curFen || _curFen !== fen || _curFen.split(' ')[1] !== getMyColor()) {
+          return;
+        }
+      }
+      if (mv.length === 5) {
+        engineRecommendedPromo = {
+          from: mv.slice(0, 2),
+          to: mv.slice(2, 4),
+          piece: mv[4].toLowerCase(),
+          color: getMyColor() || 'w'
+        };
+      } else {
+        engineRecommendedPromo = null;
+      }
       updateEval(result.cp, getMyColor());
       if (result.cp != null && detection.lastOppEvalCp !== null && detection.lastOppEvalFen && detection.lastOppEvalFen !== fen) {
-        const rawCpl = detection.lastOppEvalCp + result.cp;
-        const cpl = Number.isFinite(rawCpl) ? Math.min(500, Math.max(0, rawCpl)) : 500;
-        const oppColor = getMyColor() === 'w' ? 'b' : 'w';
-        moveLog.push({
-          color: oppColor,
-          cpl
-        });
-        recalcDetection();
+        const _mateSentinel = 9e4;
+        const _oppEvalIsMate = Math.abs(detection.lastOppEvalCp) >= _mateSentinel;
+        const _curEvalIsMate = Math.abs(result.cp) >= _mateSentinel;
+        if (!_oppEvalIsMate && !_curEvalIsMate) {
+          const rawCpl = detection.lastOppEvalCp + result.cp;
+          const cpl = Number.isFinite(rawCpl) ? Math.min(500, Math.max(0, rawCpl)) : 500;
+          const oppColor = getMyColor() === 'w' ? 'b' : 'w';
+          moveLog.push({
+            color: oppColor,
+            cpl
+          });
+          recalcDetection();
+        }
       }
       detection.lastOppEvalCp = null;
       detection.lastOppEvalFen = null;
@@ -2318,6 +3145,64 @@
         clearShading();
       }
       clearOpponentArrow();
+      try {
+        if (typeof aiAutoExplain === 'function') aiAutoExplain(fen, mv, result.cp, result.mate);
+      } catch (_) {}
+      try {
+        if (window.chessHelper.oppCoach && typeof Coach !== 'undefined') {
+          try {
+            const havingFull = !!(lastOppEngineRec && lastOppEngineRec.fen);
+            const fenBefore = havingFull ? lastOppEngineRec.fen : lastOppFenBeforeMove;
+            if (fenBefore && fenBefore !== fen) {
+              const oppUci = Coach.detectMoveBetween(fenBefore, fen);
+              if (oppUci) {
+                const oppColor = getMyColor() === 'w' ? 'b' : 'w';
+                const oppCpAfter   = (typeof result.cp === 'number') ? -result.cp : null;
+                const oppMateAfter = (typeof result.mate === 'number' && result.mate !== 0) ? -result.mate : null;
+                const oppCpBefore =
+                  havingFull ? lastOppEngineRec.cp
+                  : (lastMyEngineRec && typeof lastMyEngineRec.cp === 'number') ? -lastMyEngineRec.cp
+                  : (oppCpAfter != null ? oppCpAfter : null);
+                const oppMateBefore = havingFull ? lastOppEngineRec.mate : null;
+                const bestUci       = havingFull ? lastOppEngineRec.bestUci : null;
+                const matchedBest   = bestUci && oppUci === bestUci;
+                const oppMoveNum = (() => { try { return parseInt(fenBefore.split(' ')[5]) || null; } catch { return null; } })();
+                let out = null;
+                if (matchedBest) {
+                  out = Coach.explainBest(fenBefore, oppUci, oppCpBefore, oppMateBefore, 'them');
+                } else {
+                  const explanation = Coach.explainMove({
+                    fenBefore,
+                    fenAfter: fen,
+                    uci: oppUci,
+                    bestUci,
+                    replyUci: mv,
+                    cpBefore: oppCpBefore,
+                    cpAfter:  oppCpAfter,
+                    mover: oppColor,
+                    mateAgainst: (oppMateAfter && oppMateAfter < 0) ? -oppMateAfter : null,
+                    mateFor:     (oppMateBefore && oppMateBefore > 0) ? oppMateBefore : null,
+                    isCapture: (() => { try { return !!Coach.fenToMap(fenBefore)[oppUci.slice(2,4)]; } catch { return false; } })(),
+                    pov: 'them',
+                    ply: 99
+                  });
+                  out = explanation && explanation.text ? explanation.text : null;
+                  if (!out) {
+                    out = Coach.explainBest(fenBefore, oppUci, oppCpBefore, oppMateBefore, 'them');
+                  }
+                }
+                if (out) {
+                  if (typeof aiAppend === 'function') aiAppend('opp-move', out, oppMoveNum);
+                }
+              }
+            }
+          } finally {
+            lastOppEngineRec = null;
+            lastOppFenBeforeMove = '';
+          }
+        }
+      } catch (e) { console.warn('[Coach] opp-move explain error:', e); }
+      lastMyEngineRec = { fen, bestUci: mv, cp: result.cp, mate: result.mate };
       const _curFen = getFEN();
       const _myColor = getMyColor();
       const _fromPiece = pieceAtSquare(fen, mv.slice(0, 2));
@@ -2363,10 +3248,6 @@
             waitingForOpponent = true;
             clearArrows();
             clearShading();
-            // Intentionally NOT calling clearOpponentArrow here: the opp branch
-            // may have already drawn opp's best reply for the new turn (low-depth
-            // query can finish during our makeMove animation via MutationObserver-
-            // triggered tick). Clearing here would wipe that fresh arrow.
           } else {
             lastMovedFen = '';
             waitingForOpponent = false;
@@ -2385,7 +3266,7 @@
       }
     } finally {
       processingMy = false;
-      thinkingEl.classList.remove('active');
+      hideThinking();
     }
   }
   window.chessHelper._debug = () => ({
@@ -2399,9 +3280,18 @@
     waitingForOpp: waitingForOpponent,
   });
   let _mutDebounce = null;
+  let _lastMutTurn = null;
   const obs = new MutationObserver(() => {
     if (drawing) return;
     if (!window.chessHelper.autoPlay && !window.chessHelper.showArrow && !window.chessHelper.hiddenArrow && !window.chessHelper.showOpponent && !window.chessHelper.showEval && !window.chessHelper.detection && !window.chessHelper.voice && !window.chessHelper.streamer) return;
+    try {
+      const _curFen = getFEN();
+      const _curTurn = _curFen && _curFen.split(' ')[1];
+      if (_curTurn && _curTurn === getMyColor() && _lastMutTurn && _lastMutTurn !== _curTurn) {
+        clearOpponentArrow();
+      }
+      _lastMutTurn = _curTurn;
+    } catch {}
     if (_mutDebounce) return;
     _mutDebounce = setTimeout(() => {
       _mutDebounce = null;
@@ -2419,9 +3309,135 @@
         subtree: true,
         attributes: true
       });
+      try { setTimeout(() => { if (!drawing) tick(); }, 150); } catch {}
     }
   }
   watch();
+  setInterval(watch, 1000);
+  if (IS_CHESSKID) {
+    setInterval(() => {
+      try {
+        if (drawing || processingMy || processingOpp) return;
+        if (!window.chessHelper.showArrow && !window.chessHelper.hiddenArrow &&
+            !window.chessHelper.showOpponent && !window.chessHelper.showEval &&
+            !window.chessHelper.detection && !window.chessHelper.voice &&
+            !window.chessHelper.streamer) return;
+        tick();
+      } catch (e) {  }
+    }, 1500);
+    const CK_ARROW_STABLE_MS = 250;
+    let _ckLastSeenFen = '';
+    let _ckFenStableSince = 0;
+    const _enforceArrowVisibility = (isMy) => {
+      const svgs = document.querySelectorAll('.ch-arrow-svg');
+      for (const s of svgs) s.style.visibility = isMy ? '' : 'hidden';
+    };
+    let _ckPointerDown = false;
+    document.addEventListener('pointerdown', () => { _ckPointerDown = true; }, true);
+    document.addEventListener('pointerup',   () => { _ckPointerDown = false; }, true);
+    document.addEventListener('pointercancel', () => { _ckPointerDown = false; }, true);
+    window.addEventListener('blur', () => { _ckPointerDown = false; });
+    document.addEventListener('visibilitychange', () => { if (document.hidden) _ckPointerDown = false; });
+    let _ckPrevPiecePositions = new Map();
+    const _ckAnyPieceAnimating = () => {
+      if (_ckPointerDown) return false;
+      try {
+        const b = document.querySelector('.chess-board__board');
+        if (!b) return false;
+        const pieces = b.querySelectorAll('.piece');
+        const now = new Map();
+        let moving = false;
+        for (const p of pieces) {
+          const r = p.getBoundingClientRect();
+          const pos = Math.round(r.left) + ',' + Math.round(r.top);
+          now.set(p, pos);
+          const prev = _ckPrevPiecePositions.get(p);
+          if (prev !== undefined && prev !== pos) moving = true;
+        }
+        _ckPrevPiecePositions = now;
+        return moving;
+      } catch {}
+      return false;
+    };
+    const CK_DOM_QUIET_MS = 150;
+    let _ckBoardLastMutation = 0;
+    const _ckIsPieceNode = (n) => n && n.nodeType === 1 && (
+      (n.classList && n.classList.contains('piece')) ||
+      (typeof n.querySelector === 'function' && !!n.querySelector('.piece'))
+    );
+    const _ckBoardObs = new MutationObserver((mutations) => {
+      if (_ckPointerDown) return;
+      for (const mut of mutations) {
+        if (_ckIsPieceNode(mut.target)) {
+          _ckBoardLastMutation = performance.now();
+          return;
+        }
+        for (const n of mut.addedNodes) {
+          if (_ckIsPieceNode(n)) { _ckBoardLastMutation = performance.now(); return; }
+        }
+        for (const n of mut.removedNodes) {
+          if (_ckIsPieceNode(n)) { _ckBoardLastMutation = performance.now(); return; }
+        }
+      }
+    });
+    const _ckAttachBoardObs = () => {
+      try {
+        const b = document.querySelector('.chess-board__board');
+        if (b) {
+          _ckBoardObs.disconnect();
+          _ckBoardObs.observe(b, { childList: true, subtree: true, attributes: true, attributeFilter: ['class'] });
+        }
+      } catch {}
+    };
+    _ckAttachBoardObs();
+    setInterval(_ckAttachBoardObs, 1000);
+    const _updateTurnAttr = () => {
+      try {
+        const fen = getFEN();
+        if (fen) {
+          const myColor = getMyColor();
+          const now = performance.now();
+          if (fen !== _ckLastSeenFen) {
+            _ckLastSeenFen = fen;
+            _ckFenStableSince = now;
+          }
+          const isMyTurnByFen = fen.split(' ')[1] === myColor;
+          const stable = (now - _ckFenStableSince) >= CK_ARROW_STABLE_MS;
+          const noMovement = !_ckAnyPieceAnimating();
+          const domQuiet = (now - _ckBoardLastMutation) >= CK_DOM_QUIET_MS;
+          const want = (isMyTurnByFen && stable && noMovement && domQuiet) ? 'true' : 'false';
+          if (document.body.getAttribute('data-ch-my-turn') !== want) {
+            document.body.setAttribute('data-ch-my-turn', want);
+          }
+          _enforceArrowVisibility(want === 'true');
+        }
+      } catch {}
+      requestAnimationFrame(_updateTurnAttr);
+    };
+    requestAnimationFrame(_updateTurnAttr);
+    const _flashObs = new MutationObserver((mutations) => {
+      try {
+        const isMy = document.body.getAttribute('data-ch-my-turn') === 'true';
+        if (isMy) return;
+        for (const mut of mutations) {
+          for (const node of mut.addedNodes) {
+            if (node.nodeType === 1 && node.classList && node.classList.contains('ch-arrow-svg')) {
+              node.style.visibility = 'hidden';
+            }
+          }
+        }
+      } catch {}
+    });
+    const _attachFlashObs = () => {
+      const b = getBoard();
+      if (b) {
+        try { _flashObs.disconnect(); } catch {}
+        try { _flashObs.observe(b, { childList: true }); } catch {}
+      }
+    };
+    _attachFlashObs();
+    setInterval(_attachFlashObs, 1000);
+  }
   setInterval(() => {
     watch();
     tick();
@@ -2449,8 +3465,9 @@
       <div class="ch-pager-dots">
         <div class="ch-pager-dot active" data-page="1"></div>
         <div class="ch-pager-dot" data-page="2"></div>
+        <div class="ch-pager-dot" data-page="3"></div>
       </div>
-      <span class="ch-pager-count" id="ch-gp-count">1/2</span>
+      <span class="ch-pager-count" id="ch-gp-count">1/3</span>
       <button class="ch-pager-arrow" id="ch-gp-next" data-dir="1" aria-label="Next page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="ch-gameplay-page active" data-page="1">
@@ -2521,8 +3538,19 @@
       </div>
     </div>
     </div>
+    <div class="ch-gameplay-page" data-page="3" style="position:relative;">
+      <div class="ch-row" style="margin-bottom:6px;"><span class="ch-label" data-i18n="aiOppCoach">Opponent Explainer</span><span class="ch-info" data-tip="opp-coach">i</span><label class="ch-switch"><input type="checkbox" id="ch-opp-coach"><span class="ch-slider"></span></label></div>
+      <div class="ch-tooltip" id="tip-opp-coach" data-i18n="tipOppCoach">When on, the Opponent Explainer narrates your opponent's moves too — their strong plays and their mistakes — with the same engine analysis it uses on yours. Off by default so the feed stays focused on your moves.</div>
+      <div class="ch-page-hint" data-i18n="explainerBeta" style="margin:0 0 6px !important;">Explainer is in beta. It might be a bit vague.</div>
+      <div style="display:flex;justify-content:flex-end;align-items:center;gap:4px;margin-bottom:5px;">
+        <button type="button" id="ch-ai-clear" title="Clear feed"><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"></polyline><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"></path><path d="M10 11v6M14 11v6"></path><path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"></path></svg><span data-i18n="aiClear">Clear</span></button>
+      </div>
+      <div id="ch-ai-chat" style="height:260px;overflow-y:auto;background:rgba(0,0,0,0.25);border-radius:8px;padding:8px;font:12px/1.45 var(--ch-font);display:flex;flex-direction:column;gap:6px;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;"><div id="ch-ai-empty" data-i18n="coachEmpty" style="margin:auto;text-align:center;color:rgba(255,255,255,0.35);font-size:11px;font-style:italic;line-height:1.5;padding:12px;">Move commentary will appear here as the game goes on.</div></div>
+
+    </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-detection">
+    <div class="ch-detection-page active" data-page="1">
       <div style="display:flex;gap:4px;justify-content:center;padding:4px 0 6px;">
         <button id="ch-det-black" class="ch-det-target active" style="flex:1;padding:4px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:var(--ch-accent);color:#fff;font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;" data-i18n="black">Black</button>
         <button id="ch-det-white" class="ch-det-target" style="flex:1;padding:4px 0;border:1px solid rgba(255,255,255,0.15);border-radius:6px;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.5);font-size:11px;font-weight:600;cursor:pointer;transition:all .15s;" data-i18n="white">White</button>
@@ -2553,6 +3581,7 @@
         <button class="ch-detect-reset" id="ch-det-reset" style="flex:1;" data-i18n="detReset">Reset stats</button>
       </div>
     </div>
+    </div>
     <div class="ch-tab-content" id="ch-tab-skins">
     <div class="ch-pager" id="ch-sk-pager">
       <button class="ch-pager-arrow" id="ch-sk-prev" data-dir="-1" aria-label="Previous page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M5 1L1 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
@@ -2560,12 +3589,13 @@
         <div class="ch-pager-dot active" data-page="1"></div>
         <div class="ch-pager-dot" data-page="2"></div>
         <div class="ch-pager-dot" data-page="3"></div>
+        <div class="ch-pager-dot" data-page="4"></div>
       </div>
-      <span class="ch-pager-count" id="ch-sk-count">1/3</span>
+      <span class="ch-pager-count" id="ch-sk-count">1/4</span>
       <button class="ch-pager-arrow" id="ch-sk-next" data-dir="1" aria-label="Next page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
     </div>
     <div class="ch-skins-page active" data-page="1">
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;" data-i18n="skinsHint">Click a tile to upload a custom image</div>
+      <div class="ch-page-hint" data-i18n="skinsHint">Click a tile to upload a custom image</div>
       <div class="ch-skins-grid" id="ch-skins-grid">
         <div class="ch-skins-row-label" data-i18n="rowWhite">White</div>
         <div class="ch-skin-tile" data-skin="wk"><span class="ch-skin-label"><img src="https://images.chesscomfiles.com/chess-themes/pieces/neo/150/wk.png" style="width:28px;height:28px;pointer-events:none;"></span><button class="ch-skin-remove">&times;</button></div>
@@ -2594,7 +3624,7 @@
       <button class="ch-detect-reset" id="ch-skins-reset" data-i18n="resetSkins">Reset all skins</button>
     </div>
     <div class="ch-skins-page" data-page="2">
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;" data-i18n="premadeHint">Premade piece sets — click to apply all 12 pieces at once</div>
+      <div class="ch-page-hint" data-i18n="premadeHint">Premade piece sets — click to apply all 12 pieces at once</div>
       <input type="text" id="ch-premade-search" placeholder="Search sets…" data-i18n-ph="searchSets" style="width:100%;padding:7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;box-sizing:border-box;margin-bottom:6px;">
       <div id="ch-premade-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:240px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;padding-right:2px;">
         <div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;" data-i18n="loadingCatalog">Loading catalog…</div>
@@ -2603,7 +3633,7 @@
       <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;"><span data-i18n="setsCredit">Sets by Lichess, Rhosgfx, Sharechess.</span> <a href="https://github.com/ThatKidGlitchy/chess-engines/blob/main/skins/CREDITS.txt" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="fullCredits">Full credits</a>.</div>
     </div>
     <div class="ch-skins-page" data-page="3">
-      <div style="font-size:11px;color:rgba(255,255,255,0.4);text-align:center;padding:2px 0 4px;font-style:italic;" data-i18n="boardsHint">Board themes — click a tile to apply the board artwork</div>
+      <div class="ch-page-hint" data-i18n="boardsHint">Board themes — click a tile to apply the board artwork</div>
       <input type="text" id="ch-board-search" placeholder="Search boards…" data-i18n-ph="searchBoards" style="width:100%;padding:7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;box-sizing:border-box;margin-bottom:6px;">
       <div id="ch-board-grid" style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;max-height:240px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:rgba(255,255,255,0.2) transparent;padding-right:2px;">
         <div class="ch-premade-empty" style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;" data-i18n="loadingCatalog">Loading catalog…</div>
@@ -2611,8 +3641,25 @@
       <button class="ch-detect-reset" id="ch-board-clear" data-i18n="clearBoard">Clear board</button>
       <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;"><span data-i18n="boardsCredit">Boards by NikAgs.</span> <a href="https://github.com/NikAgs/ChessSkins" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="fullCredits">Full credits</a>.</div>
     </div>
+    <div class="ch-skins-page" data-page="4">
+      <div class="ch-page-hint" data-i18n="themesHint">Whole-site chess.com themes — click a tile to apply</div>
+      <input type="text" id="ch-themes-search" placeholder="Search themes…" data-i18n-ph="searchThemes" style="width:100%;padding:7px 10px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);font-size:12px;box-sizing:border-box;margin-bottom:6px;">
+      <div id="ch-themes-grid" class="ch-themes-grid"></div>
+      <button class="ch-detect-reset" id="ch-themes-clear" data-i18n="clearTheme">Clear theme</button>
+      <div style="font-size:10px;color:rgba(255,255,255,0.3);text-align:center;padding:4px 0 2px;line-height:1.4;"><span data-i18n="themesCredit">Themes by Patryk Jaworski (ChessHelper). CC BY-NC-ND 4.0.</span> <a href="https://github.com/gerwld/ChessHelper-extension" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="fullCredits">Full credits</a>.</div>
+    </div>
     </div>
     <div class="ch-tab-content" id="ch-tab-settings">
+    <div class="ch-pager" id="ch-set-pager">
+      <button class="ch-pager-arrow" id="ch-set-prev" data-dir="-1" aria-label="Previous page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M5 1L1 5l4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+      <div class="ch-pager-dots">
+        <div class="ch-pager-dot active" data-page="1"></div>
+        <div class="ch-pager-dot" data-page="2"></div>
+      </div>
+      <span class="ch-pager-count" id="ch-set-count">1/2</span>
+      <button class="ch-pager-arrow" id="ch-set-next" data-dir="1" aria-label="Next page"><svg xmlns="http://www.w3.org/2000/svg" width="7" height="10" viewBox="0 0 7 10"><path d="M2 1l4 4-4 4" stroke="currentColor" stroke-width="1.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    </div>
+    <div class="ch-settings-page active" data-page="1">
       <div class="ch-section-head" data-i18n="engineLabel">Engine</div>
       <div>
         <div class="ch-row"><span class="ch-label" data-i18n="engineLabel">Engine</span><span class="ch-info" data-tip="engine">i</span></div>
@@ -2630,16 +3677,6 @@
         </select>
         <div class="ch-tooltip" id="tip-engine" data-i18n="tipEngine">Which engine picks the moves. Stockfish 19 is the current default and strongest. Older Stockfish versions (8, 10, 11, 16, 17, 18) are lighter and faster on slow devices. Lozza 11 and Garbochess are pure JavaScript — slower but zero load time; their depth slider auto-caps at 12. p4wn is a deliberately weak pure-JS engine (depth capped at 4) for simulating a low-rated opponent.</div>
       </div>
-      <div class="ch-section-head" data-i18n="appearance">Appearance</div>
-      <div>
-        <div class="ch-depth-row"><span class="ch-depth-label" style="font-size:12px;" data-i18n="opacity">Opacity</span><span class="ch-info" data-tip="opacity">i</span><input type="range" class="ch-range" id="ch-opacity" min="5" max="100" value="100"><span class="ch-depth-val" id="ch-opacity-val" style="font-size:12px;">100%</span></div>
-        <div class="ch-tooltip" id="tip-opacity" data-i18n="tipOpacity">How see-through the whole helper UI is — knight icon, panel, eval bar, streamer pill. 100% is fully opaque. Lower it if the UI gets in the way of the board.</div>
-      </div>
-      <div>
-        <div class="ch-row" style="margin-top:6px;"><span class="ch-label" data-i18n="language">Language</span><span class="ch-info" data-tip="lang">i</span></div>
-        <select id="ch-lang" style="width:100%;padding:6px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;color-scheme:dark;"></select>
-        <div class="ch-tooltip" id="tip-lang" data-i18n="tipLang">Interface language. Saved separately from other settings, so it stays set even when "Save on reload" is off.</div>
-      </div>
       <div class="ch-section-head" data-i18n="keybinds">Keybinds</div>
       <div>
         <button class="ch-btn" id="ch-reset-binds" style="width:100%;padding:8px 0;background:rgba(255,255,255,0.06);color:rgba(255,255,255,0.85);border:1px solid rgba(255,255,255,0.1);border-radius:8px;font-family:var(--ch-font);font-size:12px;font-weight:600;cursor:pointer;transition:all .15s;" data-i18n="resetBinds">Reset all keybinds</button>
@@ -2650,7 +3687,41 @@
         <div class="ch-tooltip" id="tip-persist" data-i18n="tipPersist">When on, your settings (toggles, depth, keybinds, position) persist across page reloads. Turn off to make changes only for this session.</div>
       </div>
     </div>
-    <div style="text-align:center;padding:2px 0 0;font-size:9px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;line-height:1.1;"><span data-i18n="madeBy">made by</span> <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> &middot; <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="terms">Terms &amp; Disclaimer</a><div style="font-size:8px;color:rgba(255,255,255,0.10);font-family:var(--ch-font);font-weight:600;letter-spacing:0.3px;margin-top:4px;font-variant-numeric:tabular-nums;">v1.4.4</div></div>
+    <div class="ch-settings-page" data-page="2">
+      <div class="ch-section-head" data-i18n="appearance">Appearance</div>
+      <div>
+        <div class="ch-row" style="margin-bottom:4px;"><span class="ch-label" data-i18n="accentColor">Accent color</span><span class="ch-info" data-tip="theme">i</span></div>
+        <div class="ch-color-picker-row">
+          <input type="color" id="ch-theme-color" class="ch-color-input" value="#81b64c" title="Pick any accent color">
+          <div class="ch-color-picker-info">
+            <input type="text" class="ch-color-picker-hex" id="ch-theme-color-hex" value="#81B64C" maxlength="7" spellcheck="false" autocomplete="off" autocapitalize="characters">
+          </div>
+          <button type="button" class="ch-color-reset" id="ch-theme-color-change" title="Open the color picker" data-i18n="change">Change</button>
+          <button type="button" class="ch-color-reset" id="ch-theme-color-reset" title="Reset to Chess Green">Reset</button>
+        </div>
+        <div class="ch-tooltip" id="tip-theme" data-i18n="tipTheme">Any accent color for the whole helper UI — panel, buttons, arrows, keybind pulses, eval bar highlights, explainer bubbles. Hover shade and border tint are derived automatically from your pick. Does not change chess.com's own pieces or board; use the Skins tab for those.</div>
+      </div>
+      <div>
+        <div class="ch-depth-row"><span class="ch-depth-label" style="font-size:12px;" data-i18n="opacity">Opacity</span><span class="ch-info" data-tip="opacity">i</span><input type="range" class="ch-range" id="ch-opacity" min="5" max="100" value="100"><span class="ch-depth-val" id="ch-opacity-val" style="font-size:12px;">100%</span></div>
+        <div class="ch-tooltip" id="tip-opacity" data-i18n="tipOpacity">How see-through the whole helper UI is — knight icon, panel, eval bar, streamer pill. 100% is fully opaque. Lower it if the UI gets in the way of the board.</div>
+      </div>
+      <div>
+        <div class="ch-row"><span class="ch-label" data-i18n="adBlock">Block ads</span><span class="ch-info" data-tip="ad-block">i</span><label class="ch-switch"><input type="checkbox" id="ch-ad-block"><span class="ch-slider"></span></label></div>
+        <div class="ch-tooltip" id="tip-ad-block" data-i18n="tipAdBlock">Hides third-party ads on chess.com — Google ad iframes, sidebar banners, and generic ad slots. Leaves chess.com's own UI alone, including the free-trial tab and membership prompts.</div>
+      </div>
+      <div>
+        <div class="ch-row" style="margin-top:6px;"><span class="ch-label" data-i18n="language">Language</span><span class="ch-info" data-tip="lang">i</span></div>
+        <select id="ch-lang" style="width:100%;padding:6px;background:#1a1a1c;color:#fff;border:1px solid rgba(255,255,255,0.08);border-radius:8px;font-family:var(--ch-font);margin-top:4px;color-scheme:dark;"></select>
+        <div class="ch-tooltip" id="tip-lang" data-i18n="tipLang">Interface language. Saved separately from other settings, so it stays set even when "Save on reload" is off.</div>
+      </div>
+      <div class="ch-section-head" data-i18n="feedback">Feedback</div>
+      <div>
+        <div style="font-size:12px;color:rgba(255,255,255,0.75);line-height:1.5;font-family:var(--ch-font);"><span data-i18n="feedbackPrompt">Found a bug or have a suggestion?</span> <a id="ch-feedback" href="#" target="_blank" rel="noopener noreferrer" style="color:var(--ch-accent,#81b64c);text-decoration:underline;cursor:pointer;" data-i18n="reportFeedback">Let us know.</a> <span class="ch-info" data-tip="feedback">i</span></div>
+        <div class="ch-tooltip" id="tip-feedback" data-i18n="tipFeedback">Opens a Google Form in a new tab where you can report bugs, request features, or send suggestions. Your settings and anything you type here stay local — only what you submit on the form is shared.</div>
+      </div>
+    </div>
+    </div>
+    <div style="text-align:center;padding:2px 0 0;font-size:9px;color:rgba(255,255,255,0.25);letter-spacing:0.3px;line-height:1.1;"><span data-i18n="madeBy">made by</span> <a href="https://github.com/ThatKidGlitchy/chess-hacks" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.35);text-decoration:underline;">ThatKidGlitchy</a> &middot; <a href="https://github.com/ThatKidGlitchy/chess-hacks/blob/main/Chess-Assist-Disclaimer.md" target="_blank" rel="noopener noreferrer" style="color:rgba(255,255,255,0.55);text-decoration:underline;" data-i18n="terms">Terms &amp; Disclaimer</a><div style="font-size:8px;color:rgba(255,255,255,0.10);font-family:var(--ch-font);font-weight:600;letter-spacing:0.3px;margin-top:4px;font-variant-numeric:tabular-nums;">v1.5.0</div></div>
   `;
   const wrap = document.createElement('div');
   wrap.id = 'chess-helper-wrap';
@@ -2664,6 +3735,7 @@
   root.append(bubble, wrap, streamerEl);
   document.body.appendChild(root);
 
+  loadLang("en").then(() => applyI18n());
   if (currentLang && currentLang !== "en") { loadLang(currentLang).then(() => applyI18n()); }
   applyI18n();
   (function wireLangDropdown() {
@@ -2709,19 +3781,59 @@
       try { if (window.__chStartEngine) { window.__chStartEngine(); window.__chStartEngine = null; } } catch {}
     };
   }
+  function showUnsupportedHostWarning() {
+    try {
+      if (document.getElementById('ch-unsupported-backdrop')) return;
+      const title = t('unsupTitle');
+      const body  = t('unsupBody');
+      const ok    = t('unsupOk');
+      const linkCC = '<a href="https://www.chess.com" target="_blank" rel="noopener noreferrer" style="color:#81b64c;text-decoration:underline;font-weight:600;">chess.com</a>';
+      const linkCK = '<a href="https://www.chesskid.com" target="_blank" rel="noopener noreferrer" style="color:#81b64c;text-decoration:underline;font-weight:600;">chesskid.com</a>';
+      const bodyHtml = body.replace('{chesscom}', linkCC).replace('{chesskid}', linkCK);
+      const backdrop = document.createElement('div');
+      backdrop.id = 'ch-unsupported-backdrop';
+      backdrop.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:2147483647;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(4px);font-family:var(--ch-font);';
+      backdrop.innerHTML =
+        '<div role="dialog" aria-modal="true" style="width:min(380px,92vw);background:rgba(18,18,20,0.98);border:1px solid rgba(255,255,255,0.1);border-radius:16px;padding:24px;box-shadow:0 30px 80px rgba(0,0,0,0.8);color:#fff;">' +
+          '<div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;">' +
+            '<div style="width:26px;height:26px;flex:0 0 auto;border-radius:50%;background:#f5a524;color:#121212;display:flex;align-items:center;justify-content:center;font-weight:900;font-size:16px;">!</div>' +
+            '<h2 style="margin:0;font-size:18px;font-weight:700;">' + title + '</h2>' +
+          '</div>' +
+          '<div style="font-size:13px;line-height:1.5;color:rgba(255,255,255,0.75);margin-bottom:18px;">' + bodyHtml + '</div>' +
+          '<button id="ch-unsupported-ok" style="width:100%;padding:11px;border-radius:10px;border:none;background:#81b64c;color:#121212;font-family:var(--ch-font);font-size:13px;font-weight:700;cursor:pointer;">' + ok + '</button>' +
+        '</div>';
+      document.body.appendChild(backdrop);
+      const btn = backdrop.querySelector('#ch-unsupported-ok');
+      if (btn) btn.onclick = () => { try { backdrop.remove(); } catch {} };
+    } catch {}
+  }
   let _wnDeferred = false;
   if (!currentLang) {
     _wnDeferred = true;
     showLangPicker(() => {
       const code = currentLang || 'en';
-      const fire = () => { try { showWhatsNew(false); } catch {} };
+      const fire = () => {
+        try { showWhatsNew(false); } catch {}
+        if (IS_UNSUPPORTED_HOST) { try { showUnsupportedHostWarning(); } catch {} }
+      };
       if (code === 'en' || LANGS[code]) fire();
       else loadLang(code).then(fire).catch(fire);
     });
+  } else if (IS_UNSUPPORTED_HOST) {
+    const code = currentLang || 'en';
+    const fire = () => { try { showUnsupportedHostWarning(); } catch {} };
+    if (code === 'en' || LANGS[code]) fire();
+    else loadLang(code).then(fire).catch(fire);
   }
 
-  const CURRENT_VERSION = '1.4.4';
+  const CURRENT_VERSION = '1.5.0';
   const CHANGELOG = {
+    '1.5.0': [
+      '<b>Move explainer (beta)</b>. New narrator in the Gameplay tab that comments on your moves and your opponent’s moves as you play, in plain language.',
+      '<b>Accent color picker</b> in Settings → Appearance. Pick any color for the UI accent (panel highlights, arrows, buttons, eval bar). Click the swatch for the native color wheel, or type a hex directly into the box (the "#" stays put, you edit the 6 chars after it).',
+      '<b>Ad blocker</b> toggle in Settings. Blocks chess.com’s ad slots so the board and panel have room to breathe.',
+      '<b>Feedback section</b> in Settings. Found something to report or want to suggest a feature? Open a one-click link to the feedback form.'
+    ],
     '1.4.4': [ '<b>Boards tab</b> — third page on the Skins tab with a gallery of board themes. Click a tile and the board artwork applies instantly. Searchable, like the premade piece sets, with full credits to the original artists.', '<b>More premade piece sets</b> — expanded the Lichess / Rhosgfx / Sharechess catalog so there are more options on the premade page without having to upload your own.', '<b>Auto-play no longer freezes against fast opponents</b> — if the opponent premoves or replies in under ~300 ms, their move was already on the board by the time the script finished playing yours, which left auto-play stuck waiting for a FEN change that had already happened. Auto-play now detects this case and keeps going immediately.' ],
     '1.4.3': [ '<b>Interface in 16 languages</b> — English, Español, Français, Deutsch, Português, Русский, Italiano, Polski, Nederlands, Türkçe, 简体中文, 日本語, 한국어, Українська, हिन्दी, العربية. First-run picker; switch any time in Settings → Language. Non-English dictionaries fetched on demand from CDN with a 24hr local cache, so the extension stays small.', '<b>Smart text fit</b> — translated labels that would be wider than the English equivalent scale their font-size down automatically, so long German, Dutch or Russian strings never push the opacity slider or anything else outside the panel borders.', '<b>Detection stats persist until the next game</b> — accuracy, best-move rate, CPL and suspicion score stay visible after the game ends, through the lobby, and only clear once the first move of a new game is tracked. Reviewing a finished game no longer wipes the numbers mid-review.' ],
     '1.4.2': [ '<b>Depth ≈ ELO estimate</b> under the Depth slider so you can see roughly how strong each depth level plays. Rough estimate, not official — looser for Lozza / Garbochess / p4wn.', '<b>Hidden icon now persists</b> across page reloads — hide it once and chess.com reloading the page won’t bring it back. While hidden, auto-play, arrows, and voice stay paused until you unhide. If you forget the hide keybind, open the browser console (F12) after loading and it prints the current bind.', '<b>Engine loader fixes</b> — Stockfish 10/17 and p4wn no longer sit on the loading animation forever. 60-second fetch and XHR timeouts, SharedArrayBuffer cleanly disabled on iOS Safari, and the overlay reliably hides when the asm.js fallback takes over.' ],
@@ -2805,7 +3917,7 @@
     panel.querySelectorAll('.ch-gameplay-page').forEach(p => {
       p.classList.toggle('active', +p.dataset.page === gameplayPage);
     });
-    panel.querySelectorAll('.ch-pager-dot').forEach(d => {
+    panel.querySelectorAll('#ch-gp-pager .ch-pager-dot').forEach(d => {
       d.classList.toggle('active', +d.dataset.page === gameplayPage);
     });
     const prev = panel.querySelector('#ch-gp-prev');
@@ -2815,12 +3927,42 @@
     const count = panel.querySelector('#ch-gp-count');
     if (count) count.textContent = gameplayPage + '/' + gameplayPageCount;
   }
+  const _origSetGameplayPage = setGameplayPage;
+  setGameplayPage = function(n) {
+    _origSetGameplayPage(n);
+  };
   panel.querySelector('#ch-gp-prev').onclick = () => setGameplayPage(gameplayPage - 1);
   panel.querySelector('#ch-gp-next').onclick = () => setGameplayPage(gameplayPage + 1);
-  panel.querySelectorAll('.ch-pager-dot').forEach(dot => {
+  panel.querySelectorAll('#ch-gp-pager .ch-pager-dot').forEach(dot => {
     dot.onclick = () => setGameplayPage(+dot.dataset.page);
   });
   setGameplayPage(1);
+
+  let settingsPage = 1;
+  const settingsPageCount = panel.querySelectorAll('.ch-settings-page').length;
+  function setSettingsPage(n) {
+    settingsPage = Math.max(1, Math.min(settingsPageCount, n));
+    panel.querySelectorAll('.ch-settings-page').forEach(p => {
+      p.classList.toggle('active', +p.dataset.page === settingsPage);
+    });
+    panel.querySelectorAll('#ch-set-pager .ch-pager-dot').forEach(d => {
+      d.classList.toggle('active', +d.dataset.page === settingsPage);
+    });
+    const prev = panel.querySelector('#ch-set-prev');
+    const next = panel.querySelector('#ch-set-next');
+    if (prev) prev.disabled = settingsPage === 1;
+    if (next) next.disabled = settingsPage === settingsPageCount;
+    const count = panel.querySelector('#ch-set-count');
+    if (count) count.textContent = settingsPage + '/' + settingsPageCount;
+  }
+  const setPrev = panel.querySelector('#ch-set-prev');
+  const setNext = panel.querySelector('#ch-set-next');
+  if (setPrev) setPrev.onclick = () => setSettingsPage(settingsPage - 1);
+  if (setNext) setNext.onclick = () => setSettingsPage(settingsPage + 1);
+  panel.querySelectorAll('#ch-set-pager .ch-pager-dot').forEach(dot => {
+    dot.onclick = () => setSettingsPage(+dot.dataset.page);
+  });
+  setSettingsPage(1);
   panel.querySelector('#ch-det-reset').onclick = resetDetection;
   panel.querySelector('#ch-det-black').onclick = () => {
     if (detTarget === 'b') return;
@@ -2842,6 +3984,7 @@
     recalcDetection();
     saveSettings();
   };
+
   const SKIN_CODES = [ 'wk', 'wq', 'wr', 'wb', 'wn', 'wp', 'bk', 'bq', 'br', 'bb', 'bn', 'bp', 'board', 'lightTiles', 'darkTiles' ];
   let savedSkins = {};
   try {
@@ -2851,18 +3994,38 @@
   const skinStyleEl = document.createElement('style');
   skinStyleEl.id = 'ch-custom-skins';
   document.head.appendChild(skinStyleEl);
-  function getOriginalPieceUrl(code) {
-    const v = getComputedStyle(document.documentElement).getPropertyValue('--theme-piece-set-' + code);
-    if (v) {
+  const _originalPieceUrlCache = {};
+  function primePieceUrlCache() {
+    const codes = SKIN_CODES.slice(0, 12);
+    for (const c of codes) {
+      if (_originalPieceUrlCache[c]) continue;
+      const v = getComputedStyle(document.documentElement).getPropertyValue('--theme-piece-set-' + c);
+      if (!v) continue;
       const m = v.match(/url\(["']?(.*?)["']?\)/);
-      if (m) return m[1];
+      if (m) _originalPieceUrlCache[c] = m[1];
     }
-    const el = document.querySelector('.piece.' + code);
-    if (el) {
+    const missing = codes.filter(c => !_originalPieceUrlCache[c]);
+    if (!missing.length) return 0;
+    const prevDisabled = skinStyleEl.disabled;
+    skinStyleEl.disabled = true;
+    try { void document.documentElement.offsetHeight; } catch {}
+    for (const c of missing) {
+      const el = document.querySelector('.piece.' + c);
+      if (!el) continue;
       const bg = getComputedStyle(el).backgroundImage;
+      if (!bg || bg === 'none') continue;
       const m = bg.match(/url\(["']?(.*?)["']?\)/);
-      if (m) return m[1];
+      if (!m) continue;
+      if (savedSkins && savedSkins[c] === m[1]) continue;
+      _originalPieceUrlCache[c] = m[1];
     }
+    skinStyleEl.disabled = prevDisabled;
+    return codes.filter(c => !_originalPieceUrlCache[c]).length;
+  }
+  function getOriginalPieceUrl(code) {
+    if (_originalPieceUrlCache[code]) return _originalPieceUrlCache[code];
+    primePieceUrlCache();
+    if (_originalPieceUrlCache[code]) return _originalPieceUrlCache[code];
     return 'https://images.chesscomfiles.com/chess-themes/pieces/neo/150/' + code + '.png';
   }
   function clearInlineSkins() {
@@ -2888,6 +4051,7 @@
       _skinLastRun = now;
       const board = getBoard();
       if (board) {
+        primePieceUrlCache();
         const hasSkins = SKIN_CODES.slice(0, 12).some(c => savedSkins[c]);
         if (hasSkins) {
           for (const c of SKIN_CODES.slice(0, 12)) {
@@ -2932,6 +4096,7 @@
     }
   }
   function applySkins() {
+    primePieceUrlCache();
     let css = '';
     for (const c of SKIN_CODES.slice(0, 12)) {
       if (!savedSkins[c]) continue;
@@ -3036,6 +4201,12 @@
     activePremadeId = '';
     renderPremadeGrid();
   };
+  if (IS_CHESSKID) {
+    const _skP4 = panel.querySelector('.ch-skins-page[data-page="4"]');
+    if (_skP4) _skP4.remove();
+    const _skDot4 = panel.querySelector('#ch-sk-pager .ch-pager-dot[data-page="4"]');
+    if (_skDot4) _skDot4.remove();
+  }
   let skinsPage = 1;
   const skinsPageCount = panel.querySelectorAll('.ch-skins-page').length;
   function setSkinsPage(n) {
@@ -3308,6 +4479,20 @@
   renderSkinTiles();
   applySkins();
   const thinkingEl = panel.querySelector('#ch-thinking');
+  let _thinkShowTimer = null;
+  function showThinking() {
+    if (!thinkingEl) return;
+    if (_thinkShowTimer) return;
+    if (thinkingEl.classList.contains('active')) return;
+    _thinkShowTimer = setTimeout(() => {
+      _thinkShowTimer = null;
+      thinkingEl.classList.add('active');
+    }, 200);
+  }
+  function hideThinking() {
+    if (_thinkShowTimer) { clearTimeout(_thinkShowTimer); _thinkShowTimer = null; }
+    if (thinkingEl) thinkingEl.classList.remove('active');
+  }
   panel.querySelector('#ch-close').onclick = () => wrap.classList.remove('visible');
   let ox = window.innerWidth - 80, oy = 80, dragging = false, dragMoved = false, sx = 0, sy = 0;
   function setPos() {
@@ -3419,6 +4604,101 @@
       root.style.opacity = String(UI_OPACITY);
     } catch {}
   }
+  applyAccentColor(currentAccentColor());
+  const colorInput = panel.querySelector('#ch-theme-color');
+  if (colorInput) {
+    colorInput.value = currentAccentColor();
+    colorInput.oninput = e => applyAccentColor(e.target.value);
+  }
+  const colorReset = panel.querySelector('#ch-theme-color-reset');
+  if (colorReset) colorReset.onclick = () => applyAccentColor(DEFAULT_ACCENT);
+  const colorChange = panel.querySelector('#ch-theme-color-change');
+  if (colorChange && colorInput) colorChange.onclick = () => { try { colorInput.click(); } catch {} };
+  const colorHex = panel.querySelector('#ch-theme-color-hex');
+  if (colorHex) {
+    colorHex.value = currentAccentColor().toUpperCase();
+    const normalizeHex = () => {
+      const chars = colorHex.value.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
+      const want = '#' + chars.toUpperCase();
+      if (colorHex.value !== want) {
+        const prevStart = colorHex.selectionStart;
+        colorHex.value = want;
+        const pos = Math.max(1, Math.min(want.length, prevStart || want.length));
+        try { colorHex.setSelectionRange(pos, pos); } catch {}
+      }
+    };
+    colorHex.addEventListener('input', () => {
+      normalizeHex();
+      if (/^#[0-9A-F]{6}$/.test(colorHex.value)) applyAccentColor(colorHex.value.toLowerCase());
+    });
+    colorHex.addEventListener('keydown', e => {
+      const s = colorHex.selectionStart, eend = colorHex.selectionEnd;
+      if (e.key === 'Backspace' && s === 1 && eend === 1) e.preventDefault();
+      if (e.key === 'Delete' && s === 0 && eend === 0) e.preventDefault();
+      if (s === 0 && eend > 0 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        try { colorHex.setSelectionRange(1, eend); } catch {}
+      }
+    });
+    const guardCaret = () => {
+      if (colorHex.selectionStart === 0 && colorHex.selectionEnd === 0) {
+        try { colorHex.setSelectionRange(1, 1); } catch {}
+      }
+    };
+    colorHex.addEventListener('click', guardCaret);
+    colorHex.addEventListener('focus', () => setTimeout(guardCaret, 0));
+    colorHex.addEventListener('select', () => {
+      if (colorHex.selectionStart === 0) {
+        try { colorHex.setSelectionRange(1, colorHex.selectionEnd); } catch {}
+      }
+    });
+  }
+
+  applyAdBlock(currentAdBlock());
+  const adBlockToggle = panel.querySelector('#ch-ad-block');
+  if (adBlockToggle) {
+    adBlockToggle.checked = currentAdBlock();
+    adBlockToggle.onchange = e => applyAdBlock(e.target.checked);
+  }
+
+  (function wireThemesTab() {
+    const grid = panel.querySelector('#ch-themes-grid');
+    const search = panel.querySelector('#ch-themes-search');
+    const clearBtn = panel.querySelector('#ch-themes-clear');
+    if (!grid) return;
+    const esc = (s) => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    let activeTheme = currentChessHelperTheme();
+    function render(filter) {
+      const q = (filter || '').trim().toLowerCase();
+      const rows = CHESSHELPER_THEMES.filter(t => !q || t.name.toLowerCase().startsWith(q) || t.id.toLowerCase().startsWith(q));
+      if (!rows.length) {
+        grid.innerHTML = '<div style="grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.4);font-size:11px;padding:20px 0;">No themes match.</div>';
+        return;
+      }
+      grid.innerHTML = rows.map(t => {
+        const active = t.id === activeTheme ? ' active' : '';
+        const bg = t.swatch.startsWith('#') || t.swatch.startsWith('rgb') || t.swatch.startsWith('linear-gradient')
+          ? `background:${t.swatch};`
+          : `background:${t.swatch};`;
+        return `<div class="ch-theme-tile${active}" data-theme="${esc(t.id)}" title="${esc(t.name)}" style="${bg}"><span class="ch-theme-name" style="color:${esc(t.label)};">${esc(t.name)}</span></div>`;
+      }).join('');
+      grid.querySelectorAll('.ch-theme-tile').forEach(tile => {
+        tile.onclick = () => {
+          activeTheme = tile.dataset.theme || '';
+          applyChessHelperTheme(activeTheme);
+          grid.querySelectorAll('.ch-theme-tile').forEach(t => t.classList.toggle('active', t.dataset.theme === activeTheme));
+        };
+      });
+    }
+    render('');
+    if (search) search.oninput = (e) => render(e.target.value);
+    if (clearBtn) clearBtn.onclick = () => {
+      activeTheme = '';
+      clearChessHelperTheme();
+      grid.querySelectorAll('.ch-theme-tile').forEach(t => t.classList.toggle('active', !t.dataset.theme));
+    };
+    if (activeTheme) applyChessHelperTheme(activeTheme);
+  })();
+
   const opacitySlider = panel.querySelector('#ch-opacity');
   const opacityVal = panel.querySelector('#ch-opacity-val');
   if (opacitySlider) {
@@ -3446,6 +4726,9 @@
     }, reenable);
     setTimeout(reenable, 3e4);
   };
+  const FEEDBACK_URL = 'https://forms.gle/VBPyucwdNHCQHyMU6';
+  const feedbackLink = panel.querySelector('#ch-feedback');
+  if (feedbackLink) feedbackLink.href = FEEDBACK_URL;
   const resetBindsBtn = panel.querySelector('#ch-reset-binds');
   if (resetBindsBtn) resetBindsBtn.onclick = () => {
     Object.keys(binds).forEach(k => {
@@ -3569,17 +4852,17 @@
   panel.querySelector('#ch-analyze').onclick = async () => {
     const btn = panel.querySelector('#ch-analyze');
     btn.textContent = 'Analyzing...';
-    thinkingEl.classList.add('active');
+    showThinking();
     if (!inActiveGame()) {
       btn.textContent = 'No Game';
-      thinkingEl.classList.remove('active');
+      hideThinking();
       setTimeout(() => btn.textContent = 'Analyze once', 1500);
       return;
     }
     let fen = getFEN();
     if (!fen) {
       btn.textContent = 'No Game';
-      thinkingEl.classList.remove('active');
+      hideThinking();
       setTimeout(() => btn.textContent = 'Analyze once', 1500);
       return;
     }
@@ -3590,7 +4873,7 @@
       if (!isMine) {
         const candidates = await queryLocal(fen, ENGINE_DEPTH, 1);
         const om = candidates.length ? candidates[0].move : null;
-        thinkingEl.classList.remove('active');
+        hideThinking();
         if (om) {
           const _fromPc = pieceAtSquare(fen, om.slice(0, 2));
           const _oppOk = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) !== (myColor === 'w'));
@@ -3603,7 +4886,7 @@
         return;
       }
       const result = await fetchRemote(fen);
-      thinkingEl.classList.remove('active');
+      hideThinking();
       if (result) {
         const _fromPc = pieceAtSquare(fen, result.move.slice(0, 2));
         const _isOurs = !!_fromPc && ((_fromPc === _fromPc.toUpperCase()) === (myColor === 'w'));
@@ -3622,11 +4905,793 @@
       } else btn.textContent = 'No result';
       setTimeout(() => btn.textContent = 'Analyze once', 2500);
     } catch (e) {
-      thinkingEl.classList.remove('active');
+      hideThinking();
       btn.textContent = 'Error';
       setTimeout(() => btn.textContent = 'Analyze once', 2e3);
     }
   };
+  const aiStatusEl = panel.querySelector('#ch-ai-status');
+  const aiPctEl    = panel.querySelector('#ch-ai-pct');
+  const aiProgEl   = panel.querySelector('#ch-ai-progress');
+  const aiChatEl = panel.querySelector('#ch-ai-chat');
+
+  function renderAIText(text) {
+    if (!text) return '';
+    let html = String(text);
+
+    html = html.replace(/<think>[\s\S]*?<\/think>/gi, '');
+    html = html.replace(/<reasoning>[\s\S]*?<\/reasoning>/gi, '');
+    html = html.replace(/<analysis>[\s\S]*?<\/analysis>/gi, '');
+    html = html.replace(/<\|im_(?:start|end)\|>/g, '');
+    html = html.replace(/<\|(?:start|end)_header_id\|>/g, '');
+    html = html.replace(/<\|eot_id\|>/g, '');
+    html = html.replace(/\|?<\|assistant\|>/g, '');
+    html = html.trim();
+
+    html = html.replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
+    html = html.replace(/```[a-z]*\n?([\s\S]*?)```/gi,
+      '<pre style="background:rgba(0,0,0,0.3);padding:6px 8px;border-radius:4px;font-size:11px;overflow-x:auto;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;margin:4px 0;">$1</pre>');
+
+    html = html.replace(/`([^`\n]+)`/g,
+      '<code style="background:rgba(255,255,255,0.08);padding:1px 4px;border-radius:3px;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:0.92em;">$1</code>');
+
+    html = html.replace(/^###\s+(.+)$/gm, '<div style="font-weight:700;font-size:12px;margin-top:4px;">$1</div>');
+    html = html.replace(/^##\s+(.+)$/gm, '<div style="font-weight:700;font-size:13px;margin-top:4px;">$1</div>');
+    html = html.replace(/^#\s+(.+)$/gm, '<div style="font-weight:700;font-size:13px;margin-top:4px;">$1</div>');
+
+    html = html.replace(/\*\*([^*\n]+?)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__([^_\n]+?)__/g, '<strong>$1</strong>');
+
+    html = html.replace(/(^|[^*\w])\*([^*\n]+?)\*(?!\w|\*)/g, '$1<em>$2</em>');
+    html = html.replace(/(^|[^_\w])_([^_\n]+?)_(?!\w|_)/g, '$1<em>$2</em>');
+
+    html = html.replace(/^[\-\*•]\s+(.+)$/gm, '<div style="padding-left:12px;text-indent:-10px;">• $1</div>');
+    html = html.replace(/^(\d+)\.\s+(.+)$/gm, '<div style="padding-left:16px;text-indent:-16px;">$1. $2</div>');
+
+    html = html.replace(/\n/g, '<br>');
+    html = html.replace(/<br>(<div|<pre)/g, '$1');
+    html = html.replace(/(<\/div>|<\/pre>)<br>/g, '$1');
+
+    return html;
+  }
+
+  function aiAppend(role, text, moveNum) {
+    if (!aiChatEl) return null;
+    const bubble = document.createElement('div');
+    const isUser = role === 'user';
+    const isAuto = role === 'auto';
+    const isSys  = role === 'system';
+    const isUserMove = role === 'user-move';
+    const isOppMove = role === 'opp-move';
+    bubble.style.cssText = `align-self:${isUser ? 'flex-end' : 'flex-start'};max-width:92%;padding:7px 10px;border-radius:10px;background:${isUser ? 'rgba(129,182,76,0.22)' : isSys ? 'rgba(255,255,255,0.05)' : isAuto ? 'rgba(40,80,120,0.3)' : isUserMove ? 'rgba(180,90,40,0.28)' : isOppMove ? 'rgba(130,60,170,0.28)' : 'rgba(255,255,255,0.08)'};color:${isSys ? 'rgba(255,255,255,0.5)' : '#e8f0ff'};font-size:${isSys ? '10px' : '12px'};white-space:pre-wrap;word-break:break-word;font-style:${isSys ? 'italic' : 'normal'};`;
+    const useMarkdown = !isUser && !isSys;
+    const renderBody = (container, t) => {
+      if (t === '…' || t === '...') {
+        container.innerHTML = '<span class="ch-ai-typing"><span></span><span></span><span></span></span>';
+      } else if (useMarkdown) {
+        container.innerHTML = renderAIText(t);
+      } else {
+        container.textContent = t;
+      }
+    };
+    if (isAuto || isUserMove || isOppMove) {
+      const tag = document.createElement('div');
+      const movePart = (typeof moveNum === 'number' && moveNum > 0 && (isUserMove || isOppMove || isAuto)) ? ' ' + moveNum : '';
+      tag.textContent = t(isOppMove ? 'coachHdrOpp' : isUserMove ? 'coachHdrUser' : 'coachHdrWhy') + movePart + ':';
+      tag.style.cssText = 'font-size:10px;color:rgba(255,255,255,0.4);margin-bottom:3px;letter-spacing:0.3px;';
+      bubble.appendChild(tag);
+      const body = document.createElement('div');
+      renderBody(body, text);
+      bubble.appendChild(body);
+    } else {
+      renderBody(bubble, text);
+    }
+    const emptyEl = aiChatEl.querySelector('#ch-ai-empty');
+    if (emptyEl) emptyEl.remove();
+    aiChatEl.appendChild(bubble);
+    aiChatEl.scrollTop = aiChatEl.scrollHeight;
+    return bubble;
+  }
+
+  const Coach = (() => {
+    const VALUE = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
+    const _PIECE_KEY = { p: 'piecePawn', n: 'pieceKnight', b: 'pieceBishop', r: 'pieceRook', q: 'pieceQueen', k: 'pieceKing' };
+    const NAME = new Proxy({}, { get(_, k) { return _PIECE_KEY[k] ? t(_PIECE_KEY[k]) : k; } });
+    const FILES = 'abcdefgh';
+    const CENTER = ['d4','e4','d5','e5'];
+    const START_MINOR = { w: ['b1','g1','c1','f1'], b: ['b8','g8','c8','f8'] };
+    const sq = (f, r) => FILES[f] + (r + 1);
+    const fileOf = s => FILES.indexOf(s[0]);
+    const rankOf = s => parseInt(s[1], 10) - 1;
+    const KNIGHT = [[1,2],[2,1],[2,-1],[1,-2],[-1,-2],[-2,-1],[-2,1],[-1,2]];
+    const DIAG = [[1,1],[1,-1],[-1,1],[-1,-1]];
+    const ORTH = [[1,0],[-1,0],[0,1],[0,-1]];
+
+    function fenToMap(fen) {
+      const map = {};
+      const rows = (fen.split(' ')[0] || '').split('/');
+      for (let r = 0; r < 8; r++) {
+        const row = rows[r] || '';
+        let f = 0;
+        for (const ch of row) {
+          if (ch >= '1' && ch <= '8') f += +ch;
+          else {
+            const color = ch === ch.toUpperCase() ? 'w' : 'b';
+            map[sq(f, 7 - r)] = { type: ch.toLowerCase(), color };
+            f++;
+          }
+        }
+      }
+      return map;
+    }
+
+    function applyUci(fen, uci) {
+      if (!uci || uci.length < 4) return fen;
+      const parts = fen.split(' ');
+      const map = fenToMap(fen);
+      const from = uci.slice(0, 2), to = uci.slice(2, 4), promo = uci[4];
+      const piece = map[from];
+      if (!piece) return fen;
+      const turn = parts[1];
+      const enemy = turn === 'w' ? 'b' : 'w';
+      delete map[from];
+      if (piece.type === 'p' && parts[3] === to) {
+        const capRank = turn === 'w' ? rankOf(to) - 1 : rankOf(to) + 1;
+        delete map[sq(fileOf(to), capRank)];
+      }
+      if (piece.type === 'k' && Math.abs(fileOf(to) - fileOf(from)) === 2) {
+        const r = rankOf(from);
+        if (fileOf(to) > fileOf(from)) { map[sq(5, r)] = map[sq(7, r)]; delete map[sq(7, r)]; }
+        else { map[sq(3, r)] = map[sq(0, r)]; delete map[sq(0, r)]; }
+      }
+      map[to] = promo && piece.type === 'p'
+        ? { type: promo.toLowerCase(), color: piece.color }
+        : piece;
+      const rows = [];
+      for (let r = 7; r >= 0; r--) {
+        let row = '', empty = 0;
+        for (let f = 0; f < 8; f++) {
+          const p = map[sq(f, r)];
+          if (!p) { empty++; continue; }
+          if (empty) { row += empty; empty = 0; }
+          row += p.color === 'w' ? p.type.toUpperCase() : p.type;
+        }
+        if (empty) row += empty;
+        rows.push(row);
+      }
+      let ep = '-';
+      if (piece.type === 'p' && Math.abs(rankOf(to) - rankOf(from)) === 2) {
+        ep = sq(fileOf(from), (rankOf(from) + rankOf(to)) / 2);
+      }
+      return rows.join('/') + ' ' + enemy + ' ' + (parts[2] || '-') + ' ' + ep + ' 0 1';
+    }
+
+    function attacksFrom(map, from) {
+      const p = map[from];
+      if (!p) return [];
+      const f = fileOf(from), r = rankOf(from), out = [];
+      const push = (ff, rr) => {
+        if (ff >= 0 && ff < 8 && rr >= 0 && rr < 8) {
+          out.push(sq(ff, rr));
+          return !map[sq(ff, rr)];
+        }
+        return false;
+      };
+      if (p.type === 'p') {
+        const d = p.color === 'w' ? 1 : -1;
+        push(f - 1, r + d);
+        push(f + 1, r + d);
+      } else if (p.type === 'n') { for (const [df, dr] of KNIGHT) push(f + df, r + dr); }
+      else if (p.type === 'k') { for (const [df, dr] of [...DIAG, ...ORTH]) push(f + df, r + dr); }
+      else {
+        const dirs = p.type === 'b' ? DIAG : p.type === 'r' ? ORTH : [...DIAG, ...ORTH];
+        for (const [df, dr] of dirs) {
+          let ff = f + df, rr = r + dr;
+          while (push(ff, rr)) { ff += df; rr += dr; }
+        }
+      }
+      return out;
+    }
+
+    function attackersTo(map, target, color) {
+      const out = [];
+      for (const s in map) if (map[s].color === color && attacksFrom(map, s).includes(target)) out.push(s);
+      return out;
+    }
+
+    function enPrise(map, square) {
+      const p = map[square];
+      if (!p || p.type === 'k') return null;
+      const enemy = p.color === 'w' ? 'b' : 'w';
+      const atk = attackersTo(map, square, enemy);
+      if (!atk.length) return null;
+      const def = attackersTo(map, square, p.color);
+      const cheapest = Math.min(...atk.map(s => VALUE[map[s].type]));
+      const val = VALUE[p.type];
+      if (!def.length) return { loss: val, by: atk[0] };
+      if (cheapest < val) return { loss: val - cheapest, by: atk.find(s => VALUE[map[s].type] === cheapest) };
+      return null;
+    }
+
+    function hangingPieces(map, color) {
+      const out = [];
+      for (const s in map) {
+        if (map[s].color !== color) continue;
+        const e = enPrise(map, s);
+        if (e && e.loss >= 2) out.push({ square: s, type: map[s].type, ...e });
+      }
+      return out.sort((a, b) => b.loss - a.loss);
+    }
+
+    function pinInfo(map, from, color) {
+      const p = map[from];
+      if (!p || !'bqr'.includes(p.type)) return null;
+      const enemy = color === 'w' ? 'b' : 'w';
+      const dirs = p.type === 'b' ? DIAG : p.type === 'r' ? ORTH : [...DIAG, ...ORTH];
+      for (const [df, dr] of dirs) {
+        let f = fileOf(from) + df, r = rankOf(from) + dr, first = null;
+        while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+          const cur = sq(f, r), q = map[cur];
+          if (q) {
+            if (q.color !== enemy) break;
+            if (!first) first = cur;
+            else {
+              const a = map[first].type, b = q.type;
+              if (a !== 'p' && a !== 'k' && (b === 'k' || b === 'q' || (b === 'r' && VALUE[a] < 5)))
+                return { pinned: first, to: cur };
+              break;
+            }
+          }
+          f += df; r += dr;
+        }
+      }
+      return null;
+    }
+
+    function inCheck(map, color) {
+      const enemy = color === 'w' ? 'b' : 'w';
+      for (const s in map) {
+        if (map[s].color === color && map[s].type === 'k')
+          return attackersTo(map, s, enemy).length > 0;
+      }
+      return false;
+    }
+
+    function pawnsAhead(cp) {
+      const n = Math.abs(cp / 100);
+      const unit = n < 0.95 ? 'of a pawn' : n < 1.05 ? 'pawn' : 'pawns';
+      return n.toFixed(1) + ' ' + unit;
+    }
+
+    function explainBest(fenBefore, uci, cp, mate, pov) {
+      if (!fenBefore || !uci || uci.length < 4) return null;
+      pov = pov === 'them' ? 'them' : 'me';
+      let mapB, fenAfter, mapA;
+      try {
+        mapB = fenToMap(fenBefore);
+        fenAfter = applyUci(fenBefore, uci);
+        mapA = fenToMap(fenAfter);
+      } catch (e) { return null; }
+      const from = uci.slice(0, 2), to = uci.slice(2, 4);
+      const piece = mapB[from];
+      if (!piece) return null;
+      const me = piece.color;
+      const enemy = me === 'w' ? 'b' : 'w';
+      const moved = mapA[to];
+      const bits = [];
+      const andw = t('coachListAnd');
+
+      if (typeof mate === 'number' && mate > 0) {
+        bits.push(mate === 1 ? tf('coachMate1') : tf('coachMateN', {n: mate}));
+      }
+
+      if (piece.type === 'k' && Math.abs(fileOf(to) - fileOf(from)) === 2) {
+        const kingside = fileOf(to) > fileOf(from);
+        bits.push(tf(kingside ? 'coachCastleKing' : 'coachCastleQueen'));
+      }
+
+      if (uci.length === 5) {
+        const pr = uci[4].toLowerCase();
+        bits.push(tf('coachPromote', {piece: NAME[pr] || t('pieceQueen')}));
+      }
+
+      const captured = mapB[to] ? mapB[to].type
+        : (piece.type === 'p' && from[0] !== to[0]) ? 'p' : null;
+      if (captured) {
+        const movedVal = VALUE[(moved && moved.type) || piece.type];
+        const capVal = VALUE[captured];
+        const recap = enPrise(mapA, to);
+        if (!recap) {
+          if (capVal >= 3 && !attackersTo(mapB, to, enemy).length) {
+            bits.push(tf('coachWinsFree', {piece: NAME[captured], square: to}));
+          } else {
+            bits.push(tf('coachCaptures', {piece: NAME[captured], square: to}));
+          }
+        } else if (capVal > movedVal) {
+          const diff = capVal - movedVal;
+          bits.push(tp('coachWinsMaterial', pov, {mine: NAME[piece.type], theirs: NAME[captured], diff: diff}));
+        } else if (capVal === movedVal) {
+          bits.push(captured === piece.type
+            ? tf('coachTrades', {piece: NAME[piece.type]})
+            : tf('coachEvenTrade', {mine: NAME[piece.type], theirs: NAME[captured]}));
+        } else {
+          bits.push(tf('coachSacrifice', {mine: NAME[piece.type], theirs: NAME[captured]}));
+        }
+      }
+
+      const givesCheck = inCheck(mapA, enemy);
+      const alreadyMate = bits.some(b => b === tf('coachMate1') || /\b(mate|\u043c\u0430\u0442|matto|matt|\u043c\u0430\u0442)\b/i.test(b));
+
+      let forkClause = null;
+      if (moved) {
+        const attacks = attacksFrom(mapA, to);
+        const targets = attacks.filter(s =>
+          mapA[s] && mapA[s].color === enemy && mapA[s].type !== 'p' &&
+          (mapA[s].type === 'k' || VALUE[mapA[s].type] > VALUE[moved.type] ||
+           !attackersTo(mapA, s, enemy).length)
+        );
+        if (targets.length >= 2) {
+          const names = targets.slice(0, 3).map(s => tf('coachForkItem', {piece: NAME[mapA[s].type], square: s}));
+          const list = names.join(' ' + andw + ' ');
+          forkClause = tf(givesCheck ? 'coachCheckAndForks' : 'coachForks', {list});
+        }
+      }
+      if (forkClause) bits.push(forkClause);
+      else if (givesCheck && !alreadyMate) bits.push(tf('coachCheck'));
+
+      if (moved) {
+        const pin = pinInfo(mapA, to, me);
+        if (pin && !forkClause) {
+          if (mapA[pin.to].type === 'k') {
+            bits.push(tf('coachPinKing', {piece: NAME[mapA[pin.pinned].type], square: pin.pinned}));
+          } else {
+            bits.push(tf('coachPinPiece', {piece: NAME[mapA[pin.pinned].type], square: pin.pinned,
+                                           behind: NAME[mapA[pin.to].type], behindSquare: pin.to}));
+          }
+        }
+      }
+
+      if (bits.length === 0) {
+        const hangB = new Set(hangingPieces(mapB, enemy).map(h => h.square));
+        const newThreats = hangingPieces(mapA, enemy).filter(h =>
+          !hangB.has(h.square) && h.square !== to
+        );
+        if (newThreats.length) {
+          const th = newThreats[0];
+          const undef = !attackersTo(mapA, th.square, enemy).length;
+          bits.push(tf(undef ? 'coachAttacksNoDef' : 'coachAttacks', {piece: NAME[th.type], square: th.square}));
+        }
+      }
+
+      if (bits.length === 0) {
+        if (enPrise(mapB, from) && !enPrise(mapA, to)) {
+          bits.push(tf('coachSaves', {piece: NAME[piece.type], square: from}));
+        }
+      }
+
+      if (bits.length === 0 && 'nb'.includes(piece.type) && START_MINOR[me].includes(from)) {
+        const central = attacksFrom(mapA, to).filter(s => CENTER.includes(s));
+        bits.push(central.length
+          ? tf('coachDevelopsCenter', {piece: NAME[piece.type], squares: central.join(', ')})
+          : tf('coachDevelops', {piece: NAME[piece.type]}));
+      }
+
+      if (bits.length === 0 && piece.type === 'p' && CENTER.includes(to)) {
+        bits.push(tf('coachCentralSpace', {square: to}));
+      }
+
+      if (bits.length === 0 && piece.type === 'r') {
+        const file = to[0];
+        const pawnsOnFile = Object.keys(mapA).filter(s => s[0] === file && mapA[s].type === 'p');
+        const seventh = (me === 'w' && to[1] === '7') || (me === 'b' && to[1] === '2');
+        if (seventh) bits.push(tf('coachRookSeventh'));
+        else if (!pawnsOnFile.length) bits.push(tf('coachRookOpen', {file}));
+        else if (!pawnsOnFile.some(s => mapA[s].color === me)) bits.push(tf('coachRookHalfOpen', {file}));
+      }
+
+      if (bits.length === 0 && piece.type === 'p' && isPassed(mapA, to, me)) {
+        const rank = me === 'w' ? +to[1] : 9 - +to[1];
+        bits.push(tf('coachPassedPawn', {rank}));
+      }
+      if (bits.length === 0 && piece.type === 'k' && Object.keys(mapA).length <= 14) {
+        bits.push(tf('coachKingEndgame'));
+      }
+
+      if (bits.length === 0) {
+        bits.push(tf('coachSolid'));
+      }
+
+      return bits.join(' ');
+    }
+
+
+    function discoveredLine(map, vacated, color) {
+      const enemy = color === 'w' ? 'b' : 'w';
+      for (const s in map) {
+        const p = map[s];
+        if (p.color !== enemy || !'bqr'.includes(p.type)) continue;
+        const dirs = p.type === 'b' ? DIAG : p.type === 'r' ? ORTH : [...DIAG, ...ORTH];
+        for (const [df, dr] of dirs) {
+          let f = fileOf(s) + df, r = rankOf(s) + dr, seen = false;
+          while (f >= 0 && f < 8 && r >= 0 && r < 8) {
+            const cur = sq(f, r);
+            if (cur === vacated) { seen = true; }
+            else if (map[cur]) {
+              if (seen && map[cur].color === color && VALUE[map[cur].type] >= VALUE[p.type]) {
+                return { slider: s, sliderType: p.type, victim: cur, victimType: map[cur].type };
+              }
+              break;
+            }
+            f += df; r += dr;
+          }
+        }
+      }
+      return null;
+    }
+
+    function pinTargetBehind(map, moveTo, color) {
+      const pin = pinInfo(map, moveTo, color);
+      return pin;
+    }
+
+    function kingExposed(map, color) {
+      let king = null;
+      for (const s in map) if (map[s].color === color && map[s].type === 'k') king = s;
+      if (!king) return false;
+      const enemy = color === 'w' ? 'b' : 'w';
+      const f = fileOf(king), r = rankOf(king);
+      let shield = 0;
+      for (let df = -1; df <= 1; df++) {
+        for (let dr = -1; dr <= 1; dr++) {
+          const ff = f + df, rr = r + dr;
+          if (ff < 0 || ff > 7 || rr < 0 || rr > 7) continue;
+          const s = sq(ff, rr);
+          if (map[s] && map[s].color === color) shield++;
+          if (attackersTo(map, s, enemy).length) shield -= 1;
+        }
+      }
+      return shield <= 1;
+    }
+
+    function isPassed(map, square, color) {
+      const f = fileOf(square), r = rankOf(square);
+      const dir = color === 'w' ? 1 : -1;
+      const enemy = color === 'w' ? 'b' : 'w';
+      for (let ff = f - 1; ff <= f + 1; ff++) {
+        if (ff < 0 || ff > 7) continue;
+        for (let rr = r + dir; rr >= 0 && rr < 8; rr += dir) {
+          const q = map[sq(ff, rr)];
+          if (q && q.type === 'p' && q.color === enemy) return false;
+        }
+      }
+      return true;
+    }
+
+    function netAfterLine(fenBefore, fenAfter, pv, plies) {
+      pv = pv || []; plies = plies || 6;
+      const me = fenBefore.split(' ')[1];
+      const lead = (map) => {
+        let s = 0;
+        for (const sq in map) {
+          const q = map[sq];
+          if (q.type === 'k') continue;
+          s += (q.color === me ? 1 : -1) * VALUE[q.type];
+        }
+        return s;
+      };
+      let fen = fenAfter;
+      for (const u of pv.slice(0, plies)) {
+        const next = applyUci(fen, u);
+        if (next === fen) break;
+        fen = next;
+      }
+      return lead(fenToMap(fen)) - lead(fenToMap(fenBefore));
+    }
+
+    function trapped(fen, color) {
+      const map = fenToMap(fen);
+      const enemy = color === 'w' ? 'b' : 'w';
+      const out = [];
+      for (const s in map) {
+        const p = map[s];
+        if (p.color !== color || p.type === 'k' || p.type === 'p') continue;
+        if (!attackersTo(map, s, enemy).length) continue;
+        if (!enPrise(map, s)) continue;
+        const dests = _pseudoDests(map, s);
+        let safe = 0;
+        for (const dest of dests) {
+          const sim = Object.assign({}, map);
+          delete sim[s];
+          sim[dest] = p;
+          if (!enPrise(sim, dest)) safe++;
+        }
+        if (safe === 0) out.push({ square: s, type: p.type });
+      }
+      return out;
+    }
+
+    function _pseudoDests(map, from) {
+      const p = map[from];
+      if (!p) return [];
+      const f = fileOf(from), r = rankOf(from), out = [];
+      const tryPush = (ff, rr, mustCap) => {
+        if (ff < 0 || ff > 7 || rr < 0 || rr > 7) return 'off';
+        const dst = sq(ff, rr), occ = map[dst];
+        if (occ) {
+          if (occ.color !== p.color && (!mustCap || mustCap === 'cap')) out.push(dst);
+          return 'blocked';
+        }
+        if (!mustCap || mustCap === 'quiet') out.push(dst);
+        return 'empty';
+      };
+      if (p.type === 'p') {
+        const d = p.color === 'w' ? 1 : -1;
+        tryPush(f - 1, r + d, 'cap');
+        tryPush(f + 1, r + d, 'cap');
+        tryPush(f, r + d, 'quiet');
+      } else if (p.type === 'n') {
+        for (const [df, dr] of KNIGHT) tryPush(f + df, r + dr);
+      } else if (p.type === 'k') {
+        for (const [df, dr] of [...DIAG, ...ORTH]) tryPush(f + df, r + dr);
+      } else {
+        const dirs = p.type === 'b' ? DIAG : p.type === 'r' ? ORTH : [...DIAG, ...ORTH];
+        for (const [df, dr] of dirs) {
+          let ff = f + df, rr = r + dr;
+          while (true) {
+            const r2 = tryPush(ff, rr);
+            if (r2 !== 'empty') break;
+            ff += df; rr += dr;
+          }
+        }
+      }
+      return out;
+    }
+
+    function forkInfo(fen, uci) {
+      const fenAfter = applyUci(fen, uci);
+      const mapA = fenToMap(fenAfter);
+      const to = uci.slice(2, 4);
+      const mover = mapA[to];
+      if (!mover) return null;
+      const enemy = mover.color === 'w' ? 'b' : 'w';
+      const hits = attacksFrom(mapA, to).filter(s =>
+        mapA[s] && mapA[s].color === enemy && mapA[s].type !== 'p' &&
+        VALUE[mapA[s].type] >= VALUE[mover.type] &&
+        (mapA[s].type === 'k' || !attackersTo(mapA, s, enemy).length ||
+         VALUE[mapA[s].type] > VALUE[mover.type])
+      );
+      if (hits.length >= 2) return { on: hits.map(s => NAME[mapA[s].type]), piece: NAME[mover.type] };
+      return null;
+    }
+
+    function winPct(cp) {
+      const c = Math.max(-1500, Math.min(1500, cp || 0));
+      return 50 + 50 * (2 / (1 + Math.exp(-0.00368208 * c)) - 1);
+    }
+
+    function chancesNote(myBefore, myAfter, pov) {
+      pov = pov === 'them' ? 'them' : 'me';
+      const a = Math.round(winPct(myBefore));
+      const b = Math.round(winPct(myAfter));
+      if (Math.abs(a - b) < 4) return '';
+      return tp('coachChancesNote', pov, {a, b});
+    }
+
+    const _WORTH_KEY = { p: 'worthPawn', n: 'worthKnight', b: 'worthBishop', r: 'worthRook', q: 'worthQueen' };
+    const WORTH = new Proxy({}, { get(_, k) { return _WORTH_KEY[k] ? t(_WORTH_KEY[k]) : ''; } });
+
+    function pawnsUp(cp) {
+      const n = Math.abs(cp / 100);
+      const unitKey = n < 0.95 ? 'pawnsUpLess' : n < 1.05 ? 'pawnsUpOne' : 'pawnsUpMany';
+      return tf(unitKey, {n: n.toFixed(1)});
+    }
+
+    function explainMove(ctx) {
+      if (!ctx || !ctx.fenBefore || !ctx.uci || !ctx.mover) return null;
+      const pov = ctx.pov === 'them' ? 'them' : 'me';
+      let mapB, fenAfter, mapA;
+      try {
+        mapB = fenToMap(ctx.fenBefore);
+        fenAfter = ctx.fenAfter || applyUci(ctx.fenBefore, ctx.uci);
+        mapA = fenToMap(fenAfter);
+      } catch { return null; }
+      const me = ctx.mover;
+      const enemy = me === 'w' ? 'b' : 'w';
+      const moved = { from: ctx.uci.slice(0, 2), to: ctx.uci.slice(2, 4) };
+      const signed = cp => me === 'w' ? cp : -cp;
+      const myBefore = signed(ctx.cpBefore || 0);
+      const myAfter = signed(ctx.cpAfter || 0);
+      const lossPct = Math.max(0, winPct(myBefore) - winPct(myAfter));
+      const bits = [];
+      const tags = [];
+
+      if (ctx.mateAgainst && ctx.mateAgainst > 0 && ctx.mateAgainst <= 4) {
+        tags.push('allowed-mate');
+        bits.push(ctx.mateAgainst > 1
+          ? tp('coachAllowMateN', pov, {n: ctx.mateAgainst})
+          : tp('coachAllowMate1', pov));
+      }
+
+      const disc = discoveredLine(mapB, moved.from, me);
+      const attackerStillThere = disc && mapA[disc.slider] &&
+        mapA[disc.slider].color !== me && mapA[disc.slider].type === disc.sliderType;
+      if (attackerStillThere && moved.to !== disc.slider && !mapA[moved.from]) {
+        const victimAlive = mapA[disc.victim] && mapA[disc.victim].color === me;
+        if (victimAlive) {
+          tags.push('discovered-attack');
+          bits.push(tp('coachDiscovered', pov, {
+            moved: NAME[mapB[moved.from].type],
+            attacker: NAME[disc.sliderType], attackerSq: disc.slider,
+            victim: NAME[disc.victimType], victimSq: disc.victim
+          }));
+        }
+      }
+
+      const hangNow = hangingPieces(mapA, me);
+      const hangBeforeSq = new Set(hangingPieces(mapB, me).map(h => h.square));
+      const fresh = hangNow.filter(h => !hangBeforeSq.has(h.square) || h.square === moved.to);
+      if (fresh.length && !tags.includes('discovered-attack')) {
+        const w = fresh[0];
+        tags.push('hanging-piece');
+        const self = w.square === moved.to;
+        const byName = NAME[mapA[w.by] ? mapA[w.by].type : 'p'];
+        bits.push(tp(self ? 'coachHanging' : 'coachUnguarded', pov, {
+          piece: NAME[w.type], square: w.square, by: byName, bySquare: w.by
+        }));
+      }
+
+      if (!tags.includes('hanging-piece') && !tags.includes('discovered-attack')) {
+        for (const h of hangNow) {
+          if (attackersTo(mapB, h.square, me).includes(moved.from) &&
+              !attackersTo(mapA, h.square, me).length) {
+            tags.push('abandoned-defender');
+            bits.push(tp('coachAbandonedDefender', pov, {
+              moved: NAME[mapB[moved.from].type],
+              piece: NAME[h.type], square: h.square
+            }));
+            break;
+          }
+        }
+      }
+
+      if (!tags.length) {
+        let tr = trapped(fenAfter, me).filter(t => t.square === moved.to);
+        let via = null;
+        if (!tr.length && ctx.replyUci) {
+          const fenAfterReply = applyUci(fenAfter, ctx.replyUci);
+          tr = trapped(fenAfterReply, me);
+          via = ctx.replyUci;
+        }
+        if (tr.length) {
+          const tr0 = tr[0];
+          tags.push('trapped-piece');
+          bits.push(tp(via ? 'coachTrappedAfter' : 'coachTrapped', pov, {
+            piece: NAME[tr0.type], square: tr0.square, after: via || ''
+          }));
+        }
+      }
+
+      if (!tags.includes('trapped-piece') && ctx.replyUci) {
+        const f = forkInfo(fenAfter, ctx.replyUci);
+        if (f) {
+          tags.push('allowed-fork');
+          bits.push(tp('coachAllowedFork', pov, {
+            reply: ctx.replyUci, targets: f.on.join(' ' + t('coachListAnd') + ' ')
+          }));
+        }
+      }
+
+      if (ctx.bestUci && lossPct >= 5) {
+        const fork = forkInfo(ctx.fenBefore, ctx.bestUci);
+        const bestTo = ctx.bestUci.slice(2, 4);
+        const target = mapB[bestTo];
+        const freeHit = target && target.color === enemy &&
+          !attackersTo(mapB, bestTo, enemy).length;
+        if (fork) {
+          tags.push('missed-fork');
+          bits.push(tp('coachMissedFork', pov, {
+            best: ctx.bestUci, targets: fork.on.join(' ' + t('coachListAnd') + ' ')
+          }));
+        } else if (freeHit) {
+          tags.push('missed-free-material');
+          bits.push(tp('coachMissedFree', pov, {
+            best: ctx.bestUci, piece: NAME[target.type], worth: WORTH[target.type] || ''
+          }));
+        } else if (ctx.mateFor && ctx.mateFor > 0) {
+          tags.push('missed-mate');
+          bits.push(tp('coachMissedMate', pov, {best: ctx.bestUci, n: ctx.mateFor}));
+        }
+      }
+
+      if (myBefore >= 300 && myAfter < 150 && lossPct >= 10) {
+        tags.push('lost-the-win');
+        bits.push(tp('coachLostWin', pov, {amount: pawnsUp(myBefore)}));
+      }
+
+      if (ctx.isCapture && kingExposed(mapA, me) && !kingExposed(mapB, me)) {
+        tags.push('greedy-capture');
+        bits.push(tp('coachGreedyCapture', pov));
+      }
+
+      if (bits.length) {
+        const note = chancesNote(myBefore, myAfter, pov);
+        if (note) bits.push(note + '.');
+      }
+
+      if (!bits.length) return null;
+      return { tags, text: bits.join(' ') };
+    }
+
+    
+    function detectMoveBetween(fenBefore, fenAfter) {
+      try {
+        const mB = fenToMap(fenBefore), mA = fenToMap(fenAfter);
+        const gone = [], added = [];
+        for (const sq in mB) if (!mA[sq] || mA[sq].type !== mB[sq].type || mA[sq].color !== mB[sq].color) gone.push(sq);
+        for (const sq in mA) if (!mB[sq] || mB[sq].type !== mA[sq].type || mB[sq].color !== mA[sq].color) added.push(sq);
+        if (gone.length === 1 && added.length === 1) {
+          const a = added[0];
+          const movedColor = mA[a].color;
+          const from = gone.find(s => mB[s].color === movedColor);
+          return from ? from + a + (mB[from].type === 'p' && mA[a].type !== 'p' ? mA[a].type : '') : null;
+        }
+        if (gone.length === 2 && added.length === 1) {
+          const to = added[0];
+          const movedColor = mA[to].color;
+          const from = gone.find(s => mB[s].color === movedColor);
+          return from ? from + to + (mB[from].type === 'p' && mA[to].type !== 'p' ? mA[to].type : '') : null;
+        }
+        if (gone.length === 2 && added.length === 2) {
+          const movedColor = mA[added[0]].color;
+          const king = gone.find(s => mB[s].type === 'k' && mB[s].color === movedColor);
+          const kingDest = added.find(s => mA[s].type === 'k' && mA[s].color === movedColor);
+          if (king && kingDest) return king + kingDest;
+        }
+        return null;
+      } catch { return null; }
+    }
+
+    return { explainBest, explainMove, applyUci, fenToMap, attacksFrom, attackersTo,
+             discoveredLine, trapped, kingExposed, isPassed, netAfterLine,
+             forkInfo, winPct, chancesNote, detectMoveBetween };
+  })();
+
+
+  let _lastExplainedKey = '';
+  let _explainInFlight = false;
+  let _lastExplainAt = 0;
+  const AI_EXPLAIN_COOLDOWN_MS = 2500;
+
+  function aiAutoExplain(fen, moveUci, cp, mate) {
+    if (!aiChatEl) return;
+    if (!moveUci || !fen) return;
+    const key = fen.split(' ').slice(0, 2).join(' ') + '|' + moveUci;
+    if (key === _lastExplainedKey) return;
+    _lastExplainedKey = key;
+    _lastExplainAt = Date.now();
+
+    let text;
+    try { text = Coach.explainBest(fen, moveUci, cp, mate); }
+    catch (e) { console.warn('[CH-AI] coach explain error:', e); return; }
+    if (!text) return;
+    const moveNum = (() => { try { return parseInt(fen.split(' ')[5]) || null; } catch { return null; } })();
+    aiAppend('auto', text, moveNum);
+  }
+
+  function clearCoachFeed() {
+    if (!aiChatEl) return;
+    aiChatEl.innerHTML = '<div id="ch-ai-empty" data-i18n="coachEmpty" style="margin:auto;text-align:center;color:rgba(255,255,255,0.35);font-size:11px;font-style:italic;line-height:1.5;padding:12px;">' + t('coachEmpty') + '</div>';
+  }
+  window.__chClearCoachFeed = clearCoachFeed;
+  const aiClearBtn = panel.querySelector('#ch-ai-clear');
+  if (aiClearBtn) aiClearBtn.onclick = clearCoachFeed;
+
+  const oppCoachCb = panel.querySelector('#ch-opp-coach');
+  if (oppCoachCb) {
+    oppCoachCb.checked = !!window.chessHelper.oppCoach;
+    oppCoachCb.onchange = e => { window.chessHelper.oppCoach = e.target.checked; saveSettings(); };
+  }
   panel.querySelector('#ch-opponent').onchange = e => {
     window.chessHelper.showOpponent = e.target.checked;
     saveSettings();
@@ -4140,7 +6205,8 @@
         showOpponent: '#ch-opponent',
         showEval: '#ch-eval',
         voice: '#ch-voice',
-        streamer: '#ch-streamer'
+        streamer: '#ch-streamer',
+        oppCoach: '#ch-opp-coach'
       };
       for (const [k, sel] of Object.entries(tmap)) {
         const cb = panel.querySelector(sel);
@@ -4268,11 +6334,11 @@
     }
     applyDepthCap();
   }
-  console.log('chess helper loaded');
   if (uiHidden) {
     try {
       const lbl = (binds && binds.hide) ? keyLabel(binds.hide) : 'not set';
       console.log('%c[Chess Assist] UI is hidden. If you forgot your hide keybind it was: ' + lbl, 'color:#81b64c;font-weight:bold;');
     } catch {}
   }
+  console.log('%c[Chess Assist] loaded v' + CURRENT_VERSION, 'color:#81b64c;font-weight:bold;');
 })();
