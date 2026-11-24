@@ -4,6 +4,8 @@ Multi-engine assistant for **chess.com and [chesskid.com](https://www.chesskid.c
 
 **Current version: v1.5.0**
 
+📝 **Found a bug or have a suggestion?** [Send feedback via our Google Form](https://forms.gle/VBPyucwdNHCQHyMU6)
+
 ![Chess Assist — Gameplay](.github/screenshot-gameplay.png)
 
 | Settings | Detection | Skins |
