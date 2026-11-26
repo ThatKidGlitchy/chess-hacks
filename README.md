@@ -17,7 +17,7 @@ Multi-engine assistant for **chess.com and [chesskid.com](https://www.chesskid.c
 - **Works on chess.com and chesskid.com** — same panel, same features, same arrows and eval bar on both sites
 - **Multiple engines** — 10 engines at runtime: Stockfish 19/18/17/16/11/10/8, Lozza 11, Garbochess, and p4wn
 - **Move explainer (beta)** *(desktop)* — new narrator on the Gameplay tab that comments on your moves — and optionally your opponent's — in plain language as you play
-- **Accent color picker** *(desktop)* — Settings → Appearance. Pick any color for the UI accent (panel highlights, arrows, buttons, eval bar). Click the swatch for the native color wheel, click Change to open it again, or type a hex into the box (the "#" is locked so you only edit the 6 characters after it); Reset puts it back to Chess Green
+- **Accent color picker** *(desktop)* — Settings → Appearance. Pick any color for the UI accent (panel highlights, arrows, buttons, eval bar).
 - **Whole-site Themes page** *(desktop)* — 4th page of the Skins tab with full site themes (AMOLED, Night Owl, Frutiger Aero, Pink, and more). Click a tile to apply the theme across the whole site; Clear theme returns to the default look
 - **Ad blocker** *(desktop)* — toggle in Settings. Blocks chess.com's ad slots so the board and panel have room to breathe
 - **Feedback link** *(desktop)* — one-click link in Settings to the feedback / bug-report form
